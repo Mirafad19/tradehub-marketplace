@@ -1,13 +1,18 @@
-// Lightweight client-only cart store backed by localStorage.
-// Will be migrated to a DB-backed cart in Wave 2.
+// Client-side cart, persisted to localStorage.
+// Stores enough info to render cart/checkout without re-fetching.
 import { useEffect, useState } from "react";
 
 export type CartItem = {
   productId: string;
+  sellerId: string;
+  name: string;
+  priceKobo: number;
+  imageUrl: string | null;
+  stock: number;
   quantity: number;
 };
 
-const STORAGE_KEY = "tradehub:cart";
+const STORAGE_KEY = "rccg-tradehub:cart:v2";
 const listeners = new Set<() => void>();
 
 function read(): CartItem[] {
@@ -26,13 +31,13 @@ function write(items: CartItem[]) {
   listeners.forEach((fn) => fn());
 }
 
-export function addToCart(productId: string, quantity = 1) {
+export function addToCart(item: Omit<CartItem, "quantity">, quantity = 1) {
   const items = read();
-  const existing = items.find((i) => i.productId === productId);
+  const existing = items.find((i) => i.productId === item.productId);
   if (existing) {
-    existing.quantity += quantity;
+    existing.quantity = Math.min(existing.stock, existing.quantity + quantity);
   } else {
-    items.push({ productId, quantity });
+    items.push({ ...item, quantity: Math.min(item.stock, quantity) });
   }
   write(items);
 }
@@ -43,7 +48,7 @@ export function updateQuantity(productId: string, quantity: number) {
     items = items.filter((i) => i.productId !== productId);
   } else {
     const existing = items.find((i) => i.productId === productId);
-    if (existing) existing.quantity = quantity;
+    if (existing) existing.quantity = Math.min(existing.stock, quantity);
   }
   write(items);
 }
@@ -58,7 +63,6 @@ export function clearCart() {
 
 export function useCart() {
   const [items, setItems] = useState<CartItem[]>(() => read());
-
   useEffect(() => {
     const sync = () => setItems(read());
     listeners.add(sync);
@@ -67,7 +71,7 @@ export function useCart() {
       listeners.delete(sync);
     };
   }, []);
-
   const count = items.reduce((sum, i) => sum + i.quantity, 0);
-  return { items, count };
+  const subtotalKobo = items.reduce((s, i) => s + i.priceKobo * i.quantity, 0);
+  return { items, count, subtotalKobo };
 }

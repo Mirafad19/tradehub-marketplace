@@ -1,44 +1,56 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
-import { Truck, ShieldCheck, ArrowLeft } from "lucide-react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { ArrowLeft, ShieldCheck, Truck } from "lucide-react";
+import { toast } from "sonner";
 import { SiteLayout } from "@/components/SiteLayout";
-import {
-  formatNaira,
-  products as allProducts,
-} from "@/lib/products";
 import { useCart, clearCart } from "@/lib/cart-store";
+import { formatNaira } from "@/lib/format";
+import { useAuth } from "@/lib/auth";
+import { createOrder } from "@/lib/orders.functions";
+import { initPaystackPayment } from "@/lib/paystack.functions";
 
 export const Route = createFileRoute("/checkout")({
-  head: () => ({
-    meta: [
-      { title: "Checkout — TradeHub" },
-      { name: "description", content: "Securely complete your TradeHub purchase." },
-    ],
-  }),
+  head: () => ({ meta: [{ title: "Checkout — RCCGTradeHUB" }] }),
   component: CheckoutPage,
 });
 
+const STATES = [
+  "Lagos", "Abuja (FCT)", "Rivers", "Oyo", "Kano", "Kaduna", "Enugu", "Edo",
+  "Anambra", "Delta", "Ogun", "Osun", "Ondo", "Ekiti", "Plateau", "Imo",
+];
+
 function CheckoutPage() {
-  const { items } = useCart();
-  const [step, setStep] = useState<"details" | "done">("details");
+  const { items, subtotalKobo } = useCart();
+  const { user, loading } = useAuth();
+  const navigate = useNavigate();
+  const [busy, setBusy] = useState(false);
+  const [form, setForm] = useState({
+    name: "",
+    phone: "",
+    email: "",
+    address: "",
+    city: "",
+    state: "Lagos",
+    notes: "",
+    payment: "paystack" as "paystack" | "pay_on_delivery" | "bank_transfer",
+  });
 
-  const lines = items
-    .map((item) => {
-      const product = allProducts.find((p) => p.id === item.productId);
-      return product ? { product, quantity: item.quantity } : null;
-    })
-    .filter((x): x is NonNullable<typeof x> => x !== null);
+  useEffect(() => {
+    if (!loading && !user) navigate({ to: "/auth", search: { redirect: "/checkout" } as never });
+    if (user) {
+      setForm((f) => ({ ...f, email: f.email || user.email || "" }));
+    }
+  }, [user, loading, navigate]);
 
-  const subtotal = lines.reduce((sum, l) => sum + l.product.price * l.quantity, 0);
-  const shipping = subtotal > 100000 ? 0 : 2500;
-  const total = subtotal + shipping;
+  const deliveryKobo = subtotalKobo > 10_000_000 ? 0 : 250_000; // ₦2,500
+  const totalKobo = subtotalKobo + deliveryKobo;
 
-  if (lines.length === 0 && step === "details") {
+  if (items.length === 0) {
     return (
       <SiteLayout>
         <div className="mx-auto max-w-2xl px-4 py-24 text-center sm:px-6">
           <h1 className="font-display text-2xl font-semibold">Your cart is empty</h1>
-          <Link to="/" className="mt-4 inline-block text-sm font-semibold text-brand hover:underline">
+          <Link to="/" className="mt-4 inline-block text-brand hover:underline">
             Continue shopping →
           </Link>
         </div>
@@ -46,25 +58,45 @@ function CheckoutPage() {
     );
   }
 
-  if (step === "done") {
-    return (
-      <SiteLayout>
-        <div className="mx-auto max-w-xl px-4 py-24 text-center sm:px-6">
-          <div className="mx-auto mb-6 grid h-16 w-16 place-items-center rounded-full bg-success text-success-foreground text-3xl">
-            ✓
-          </div>
-          <h1 className="font-display text-3xl font-semibold">Order placed!</h1>
-          <p className="mt-2 text-muted-foreground">
-            Your order has been routed to the sellers. You'll receive an SMS
-            once it ships. Payment infrastructure (Stripe) goes live in the
-            next update.
-          </p>
-          <Link to="/" className="mt-8 inline-block rounded-full bg-brand px-6 py-3 text-sm font-semibold text-brand-foreground hover:bg-brand/90">
-            Continue shopping
-          </Link>
-        </div>
-      </SiteLayout>
-    );
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!user) return;
+    setBusy(true);
+    try {
+      const order = await createOrder({
+        data: {
+          items: items.map((i) => ({
+            productId: i.productId,
+            quantity: i.quantity,
+          })),
+          buyer_name: form.name,
+          buyer_phone: form.phone,
+          buyer_email: form.email,
+          delivery_address: form.address,
+          delivery_city: form.city,
+          delivery_state: form.state,
+          delivery_notes: form.notes || null,
+          payment_method: form.payment,
+        },
+      });
+
+      if (form.payment === "paystack") {
+        const { authorization_url } = await initPaystackPayment({
+          data: { order_id: order.id, origin: window.location.origin },
+        });
+        clearCart();
+        window.location.assign(authorization_url);
+        return;
+      }
+      clearCart();
+      toast.success(`Order ${order.order_number} placed!`);
+      navigate({ to: "/account" });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to place order";
+      toast.error(msg);
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -75,21 +107,14 @@ function CheckoutPage() {
         </Link>
         <h1 className="mb-8 font-display text-3xl font-semibold">Checkout</h1>
 
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            clearCart();
-            setStep("done");
-          }}
-          className="grid gap-8 lg:grid-cols-[1.6fr_1fr]"
-        >
+        <form onSubmit={submit} className="grid gap-8 lg:grid-cols-[1.6fr_1fr]">
           <div className="space-y-6">
             <Section title="Contact">
               <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Full name" name="name" required />
-                <Field label="Phone" name="phone" type="tel" required placeholder="080…" />
+                <Field label="Full name" value={form.name} onChange={(v) => setForm({ ...form, name: v })} required />
+                <Field label="Phone" value={form.phone} onChange={(v) => setForm({ ...form, phone: v })} required type="tel" placeholder="080…" />
                 <div className="sm:col-span-2">
-                  <Field label="Email" name="email" type="email" required />
+                  <Field label="Email" value={form.email} onChange={(v) => setForm({ ...form, email: v })} required type="email" />
                 </div>
               </div>
             </Section>
@@ -97,95 +122,92 @@ function CheckoutPage() {
             <Section title="Delivery address">
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="sm:col-span-2">
-                  <Field label="Street address" name="address" required />
+                  <Field label="Street address" value={form.address} onChange={(v) => setForm({ ...form, address: v })} required />
                 </div>
-                <Field label="City / area" name="city" required placeholder="e.g. Lekki Phase 1" />
-                <SelectField
-                  label="State"
-                  name="state"
-                  options={[
-                    "Lagos", "Abuja (FCT)", "Rivers", "Oyo", "Kano",
-                    "Kaduna", "Enugu", "Edo", "Anambra", "Delta",
-                  ]}
-                />
+                <Field label="City / area" value={form.city} onChange={(v) => setForm({ ...form, city: v })} required />
+                <label className="block text-sm">
+                  <span className="mb-1.5 block font-medium">State</span>
+                  <select
+                    value={form.state}
+                    onChange={(e) => setForm({ ...form, state: e.target.value })}
+                    className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
+                  >
+                    {STATES.map((s) => <option key={s}>{s}</option>)}
+                  </select>
+                </label>
+                <div className="sm:col-span-2">
+                  <Field label="Delivery notes (optional)" value={form.notes} onChange={(v) => setForm({ ...form, notes: v })} />
+                </div>
               </div>
             </Section>
 
-            <Section title="Shipping method">
-              <ShippingOption
-                id="ship-standard"
-                title="Standard delivery"
-                subtitle="3–5 business days nationwide"
-                price={shipping === 0 ? "Free" : formatNaira(2500)}
-                defaultChecked
-              />
-              <ShippingOption
-                id="ship-express"
-                title="Express delivery"
-                subtitle="24 hours in Lagos, 48 hours major cities"
-                price={formatNaira(5500)}
-              />
-            </Section>
-
             <Section title="Payment">
-              <p className="rounded-lg bg-warning/10 px-3 py-2 text-xs text-warning-foreground ring-1 ring-warning/30">
-                Live card payments via Stripe will be activated in the next
-                update. For now, place the order to test the flow end-to-end.
-              </p>
-              <div className="mt-4 space-y-2">
-                {["Card (Visa / Mastercard / Verve)", "Bank transfer", "USSD / Mobile money"].map((opt, i) => (
+              <div className="space-y-2">
+                {[
+                  { v: "paystack", t: "Pay now with Paystack", d: "Card, bank transfer, USSD" },
+                  { v: "pay_on_delivery", t: "Pay on delivery", d: "Cash or transfer when item arrives" },
+                  { v: "bank_transfer", t: "Direct bank transfer", d: "Seller will share account details" },
+                ].map((opt) => (
                   <label
-                    key={opt}
-                    className="flex items-center gap-3 rounded-lg border border-border bg-card p-3 text-sm has-[input:checked]:border-brand has-[input:checked]:bg-brand-soft"
+                    key={opt.v}
+                    className="flex items-start gap-3 rounded-lg border border-border bg-card p-3 text-sm has-[input:checked]:border-brand has-[input:checked]:bg-brand-soft"
                   >
                     <input
                       type="radio"
                       name="payment"
-                      defaultChecked={i === 0}
-                      className="accent-brand"
+                      value={opt.v}
+                      checked={form.payment === opt.v}
+                      onChange={() => setForm({ ...form, payment: opt.v as typeof form.payment })}
+                      className="mt-0.5 accent-brand"
                     />
-                    {opt}
+                    <div>
+                      <div className="font-semibold">{opt.t}</div>
+                      <div className="text-xs text-muted-foreground">{opt.d}</div>
+                    </div>
                   </label>
                 ))}
               </div>
             </Section>
           </div>
 
-          {/* Summary */}
           <aside className="h-fit space-y-4 rounded-2xl bg-surface p-6 ring-1 ring-border lg:sticky lg:top-24">
             <h2 className="font-display text-lg font-semibold">Your order</h2>
             <ul className="space-y-2 text-sm">
-              {lines.map(({ product, quantity }) => (
-                <li key={product.id} className="flex justify-between gap-3">
+              {items.map((it) => (
+                <li key={it.productId} className="flex justify-between gap-3">
                   <span className="text-muted-foreground">
-                    {product.name} <span className="text-foreground">× {quantity}</span>
+                    {it.name} <span className="text-foreground">× {it.quantity}</span>
                   </span>
-                  <span className="font-semibold">{formatNaira(product.price * quantity)}</span>
+                  <span className="font-semibold">{formatNaira(it.priceKobo * it.quantity)}</span>
                 </li>
               ))}
             </ul>
             <div className="h-px bg-border" />
-            <dl className="space-y-1.5 text-sm">
-              <Row label="Subtotal" value={formatNaira(subtotal)} />
-              <Row
-                label="Shipping"
-                value={shipping === 0 ? <span className="text-success">Free</span> : formatNaira(shipping)}
-              />
-            </dl>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Subtotal</span>
+              <span className="font-semibold">{formatNaira(subtotalKobo)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Delivery</span>
+              <span className="font-semibold">
+                {deliveryKobo === 0 ? <span className="text-success">Free</span> : formatNaira(deliveryKobo)}
+              </span>
+            </div>
             <div className="h-px bg-border" />
             <div className="flex items-baseline justify-between">
               <span className="font-semibold">Total</span>
-              <span className="font-display text-2xl font-bold text-brand">{formatNaira(total)}</span>
+              <span className="font-display text-2xl font-bold text-brand">{formatNaira(totalKobo)}</span>
             </div>
             <button
               type="submit"
-              className="w-full rounded-full bg-brand py-3 text-sm font-semibold text-brand-foreground hover:bg-brand/90"
+              disabled={busy}
+              className="w-full rounded-full bg-brand py-3 text-sm font-semibold text-brand-foreground hover:bg-brand/90 disabled:opacity-50"
             >
-              Place order
+              {busy ? "Processing…" : form.payment === "paystack" ? "Pay with Paystack" : "Place order"}
             </button>
             <div className="flex items-start gap-2 text-xs text-muted-foreground">
               <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-brand" />
-              Payment held in escrow until delivery is confirmed.
+              Verified church sellers only.
             </div>
             <div className="flex items-start gap-2 text-xs text-muted-foreground">
               <Truck className="mt-0.5 h-4 w-4 shrink-0 text-brand" />
@@ -208,97 +230,22 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 function Field({
-  label,
-  name,
-  type = "text",
-  required,
-  placeholder,
+  label, value, onChange, type = "text", required, placeholder,
 }: {
-  label: string;
-  name: string;
-  type?: string;
-  required?: boolean;
-  placeholder?: string;
+  label: string; value: string; onChange: (v: string) => void;
+  type?: string; required?: boolean; placeholder?: string;
 }) {
   return (
     <label className="block text-sm">
       <span className="mb-1.5 block font-medium">{label}</span>
       <input
         type={type}
-        name={name}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
         required={required}
         placeholder={placeholder}
         className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
       />
     </label>
-  );
-}
-
-function SelectField({
-  label,
-  name,
-  options,
-}: {
-  label: string;
-  name: string;
-  options: string[];
-}) {
-  return (
-    <label className="block text-sm">
-      <span className="mb-1.5 block font-medium">{label}</span>
-      <select
-        name={name}
-        className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
-      >
-        {options.map((o) => (
-          <option key={o}>{o}</option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
-function ShippingOption({
-  id,
-  title,
-  subtitle,
-  price,
-  defaultChecked,
-}: {
-  id: string;
-  title: string;
-  subtitle: string;
-  price: string;
-  defaultChecked?: boolean;
-}) {
-  return (
-    <label
-      htmlFor={id}
-      className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-border bg-card p-4 text-sm has-[input:checked]:border-brand has-[input:checked]:bg-brand-soft"
-    >
-      <div className="flex items-center gap-3">
-        <input
-          id={id}
-          type="radio"
-          name="shipping"
-          defaultChecked={defaultChecked}
-          className="accent-brand"
-        />
-        <div>
-          <div className="font-semibold">{title}</div>
-          <div className="text-xs text-muted-foreground">{subtitle}</div>
-        </div>
-      </div>
-      <span className="font-semibold">{price}</span>
-    </label>
-  );
-}
-
-function Row({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="flex justify-between">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="font-semibold">{value}</dd>
-    </div>
   );
 }

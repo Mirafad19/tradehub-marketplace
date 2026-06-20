@@ -1,99 +1,88 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { SiteLayout } from "@/components/SiteLayout";
-import { ProductCard } from "@/components/ProductCard";
-import {
-  getCategoryBySlug,
-  getProductsByCategory,
-  categories,
-} from "@/lib/products";
+import { supabase } from "@/integrations/supabase/client";
+import { ProductCardDB } from "@/routes/index";
 
 export const Route = createFileRoute("/category/$slug")({
-  loader: ({ params }) => {
-    const category = getCategoryBySlug(params.slug);
-    if (!category) throw notFound();
-    return { category, products: getProductsByCategory(params.slug) };
-  },
-  head: ({ loaderData }) => ({
-    meta: loaderData
-      ? [
-          { title: `${loaderData.category.name} — TradeHub` },
-          {
-            name: "description",
-            content: `Shop ${loaderData.category.name.toLowerCase()} from verified Nigerian sellers on TradeHub.`,
-          },
-        ]
-      : [],
-  }),
-  notFoundComponent: () => (
-    <SiteLayout>
-      <div className="mx-auto max-w-7xl px-4 py-24 text-center sm:px-6">
-        <h1 className="font-display text-3xl font-semibold">Category not found</h1>
-        <p className="mt-2 text-muted-foreground">
-          We couldn't find that category. Try another one below.
-        </p>
-        <div className="mt-8 flex flex-wrap justify-center gap-2">
-          {categories.map((c) => (
-            <Link
-              key={c.slug}
-              to="/category/$slug"
-              params={{ slug: c.slug }}
-              className="rounded-full bg-muted px-4 py-1.5 text-sm hover:bg-brand-soft hover:text-brand"
-            >
-              {c.name}
-            </Link>
-          ))}
-        </div>
-      </div>
-    </SiteLayout>
-  ),
-  errorComponent: ({ reset }) => (
-    <SiteLayout>
-      <div className="mx-auto max-w-7xl px-4 py-24 text-center sm:px-6">
-        <h1 className="font-display text-2xl font-semibold">Something went wrong</h1>
-        <button
-          onClick={reset}
-          className="mt-4 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-brand-foreground"
-        >
-          Try again
-        </button>
-      </div>
-    </SiteLayout>
-  ),
   component: CategoryPage,
 });
 
+type CatRow = { id: string; name: string; emoji: string | null };
+
 function CategoryPage() {
-  const { category, products } = Route.useLoaderData();
+  const { slug } = Route.useParams();
+  const [category, setCategory] = useState<CatRow | null>(null);
+  const [products, setProducts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [notFoundFlag, setNotFoundFlag] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      const { data: cat } = await supabase
+        .from("categories")
+        .select("id,name,emoji")
+        .eq("slug", slug)
+        .maybeSingle();
+      if (!cat) {
+        setNotFoundFlag(true);
+        setLoading(false);
+        return;
+      }
+      setCategory(cat as CatRow);
+      const { data: prods } = await supabase
+        .from("products")
+        .select(
+          "id,slug,name,price_kobo,original_price_kobo,image_urls,stock,sellers(business_name),categories(slug,name)",
+        )
+        .eq("category_id", cat.id)
+        .eq("status", "active")
+        .gt("stock", 0)
+        .order("created_at", { ascending: false });
+      setProducts(prods ?? []);
+      setLoading(false);
+    })();
+  }, [slug]);
+
+  if (notFoundFlag) {
+    return (
+      <SiteLayout>
+        <div className="mx-auto max-w-2xl px-4 py-24 text-center sm:px-6">
+          <h1 className="font-display text-2xl font-semibold">Category not found</h1>
+          <Link to="/" className="mt-4 inline-block text-brand hover:underline">
+            Back to home →
+          </Link>
+        </div>
+      </SiteLayout>
+    );
+  }
 
   return (
     <SiteLayout>
       <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
-        <nav className="mb-4 text-xs text-muted-foreground">
-          <Link to="/" className="hover:text-brand">Home</Link>
-          <span className="mx-2">/</span>
-          <span className="text-foreground">{category.name}</span>
-        </nav>
+        <Link to="/" className="text-sm text-muted-foreground hover:text-brand">
+          ← All categories
+        </Link>
+        <div className="mt-3 flex items-center gap-3">
+          <span className="text-4xl">{category?.emoji}</span>
+          <h1 className="font-display text-3xl font-semibold">{category?.name}</h1>
+        </div>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {loading ? "Loading…" : `${products.length} product${products.length === 1 ? "" : "s"}`}
+        </p>
 
-        <header className="mb-8 flex items-end justify-between gap-4">
-          <div>
-            <h1 className="font-display text-3xl font-semibold sm:text-4xl">
-              {category.emoji} {category.name}
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {products.length} {products.length === 1 ? "product" : "products"} from verified sellers
+        <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+          {products.map((p) => (
+            <ProductCardDB key={p.id} p={p} />
+          ))}
+        </div>
+
+        {!loading && products.length === 0 && (
+          <div className="mt-10 rounded-2xl bg-surface px-6 py-14 text-center ring-1 ring-border">
+            <p className="text-sm text-muted-foreground">
+              No active products in this category yet.
             </p>
-          </div>
-        </header>
-
-        {products.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border bg-surface py-20 text-center">
-            <p className="text-muted-foreground">No products listed in this category yet.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:gap-4 lg:grid-cols-4">
-            {products.map((p: import("@/lib/products").Product) => (
-              <ProductCard key={p.id} product={p} />
-            ))}
           </div>
         )}
       </div>
