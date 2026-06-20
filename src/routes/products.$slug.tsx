@@ -238,7 +238,7 @@ function ProductPage() {
           <section className="mt-20">
             <h2 className="mb-6 font-display text-2xl font-semibold">More like this</h2>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:gap-4 lg:grid-cols-4">
-              {related.map((p) => (
+              {related.map((p: import("@/lib/products").Product) => (
                 <ProductCard key={p.id} product={p} />
               ))}
             </div>
