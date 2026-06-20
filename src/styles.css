@@ -10,7 +10,7 @@
  * Typography: Albert Sans (display) + Inter (body).
  */
 
-@import url("https://fonts.googleapis.com/css2?family=Albert+Sans:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap");
+
 
 @theme inline {
   --font-display: "Albert Sans", system-ui, sans-serif;
