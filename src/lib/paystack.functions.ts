@@ -3,7 +3,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 export const initPaystackPayment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { order_id: string }) => input)
+  .inputValidator((input: { order_id: string; origin: string }) => input)
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const { data: order, error } = await supabase
@@ -17,12 +17,7 @@ export const initPaystackPayment = createServerFn({ method: "POST" })
     const secret = process.env.PAYSTACK_KEY;
     if (!secret) throw new Error("Paystack not configured");
 
-    const origin =
-      (globalThis as { location?: { origin?: string } }).location?.origin ??
-      process.env.SITE_URL ??
-      "";
-
-    const callbackUrl = `${origin}/api/public/paystack/callback?order=${order.id}`;
+    const callbackUrl = `${data.origin}/api/public/paystack/callback?order=${order.id}`;
 
     const res = await fetch("https://api.paystack.co/transaction/initialize", {
       method: "POST",

@@ -82,7 +82,7 @@ function CheckoutPage() {
 
       if (form.payment === "paystack") {
         const { authorization_url } = await initPaystackPayment({
-          data: { order_id: order.id },
+          data: { order_id: order.id, origin: window.location.origin },
         });
         clearCart();
         window.location.assign(authorization_url);
