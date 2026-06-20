@@ -2,87 +2,48 @@ import { Link } from "@tanstack/react-router";
 
 export function SiteFooter() {
   return (
-    <footer className="mt-24 border-t border-border bg-surface">
-      <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6">
-        <div className="grid grid-cols-2 gap-10 md:grid-cols-4">
-          <div className="col-span-2 md:col-span-1">
-            <div className="flex items-center gap-1.5">
-              <span className="grid h-7 w-7 place-items-center rounded-md bg-brand text-brand-foreground font-display font-bold">
-                T
-              </span>
-              <span className="font-display text-lg font-semibold tracking-tight">
-                TradeHub
-              </span>
-            </div>
-            <p className="mt-4 max-w-xs text-sm leading-relaxed text-muted-foreground">
-              Nigeria's local-first marketplace, connecting verified merchants with
-              millions of shoppers nationwide.
-            </p>
+    <footer className="mt-16 border-t border-border bg-surface">
+      <div className="mx-auto grid max-w-7xl gap-8 px-4 py-12 sm:px-6 md:grid-cols-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="grid h-8 w-8 place-items-center rounded-md bg-brand text-brand-foreground font-display font-bold">
+              R
+            </span>
+            <span className="font-display text-base font-semibold">RCCGTradeHUB</span>
           </div>
-
-          <FooterColumn
-            title="Marketplace"
-            links={[
-              { label: "Browse products", to: "/" },
-              { label: "Categories", to: "/" },
-              { label: "Flash sales", to: "/" },
-              { label: "Best sellers", to: "/" },
-            ]}
-          />
-          <FooterColumn
-            title="Sell"
-            links={[
-              { label: "Become a seller", to: "/sell" },
-              { label: "Seller dashboard", to: "/seller" },
-              { label: "Fees & payouts", to: "/sell" },
-              { label: "Seller policy", to: "/sell" },
-            ]}
-          />
-          <FooterColumn
-            title="Support"
-            links={[
-              { label: "Help center", to: "/" },
-              { label: "Track order", to: "/account" },
-              { label: "Returns & refunds", to: "/" },
-              { label: "Contact us", to: "/" },
-            ]}
-          />
+          <p className="mt-3 text-sm text-muted-foreground">
+            The Redeemed Christian Church of God members' marketplace. Buy and
+            sell within our church community.
+          </p>
         </div>
-
-        <div className="mt-12 flex flex-col items-start justify-between gap-4 border-t border-border pt-8 text-xs text-muted-foreground sm:flex-row sm:items-center">
-          <span>© {new Date().getFullYear()} TradeHub Marketplace. All rights reserved.</span>
-          <div className="flex gap-5">
-            <a href="#" className="hover:text-foreground">Terms</a>
-            <a href="#" className="hover:text-foreground">Privacy</a>
-            <a href="#" className="hover:text-foreground">Cookies</a>
-          </div>
+        <div>
+          <h4 className="font-semibold">Shop</h4>
+          <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
+            <li><Link to="/" className="hover:text-brand">All products</Link></li>
+            <li><Link to="/cart" className="hover:text-brand">Your cart</Link></li>
+            <li><Link to="/account" className="hover:text-brand">Your orders</Link></li>
+          </ul>
+        </div>
+        <div>
+          <h4 className="font-semibold">Sell</h4>
+          <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
+            <li><Link to="/seller" className="hover:text-brand">Become a seller</Link></li>
+            <li><Link to="/seller" className="hover:text-brand">Seller dashboard</Link></li>
+          </ul>
+        </div>
+        <div>
+          <h4 className="font-semibold">Contact</h4>
+          <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
+            <li>Support: hello@rccgtradehub.ng</li>
+            <li>Mon–Sat · 9am–6pm WAT</li>
+          </ul>
+        </div>
+      </div>
+      <div className="border-t border-border">
+        <div className="mx-auto max-w-7xl px-4 py-5 text-xs text-muted-foreground sm:px-6">
+          © {new Date().getFullYear()} RCCGTradeHUB. All rights reserved.
         </div>
       </div>
     </footer>
-  );
-}
-
-function FooterColumn({
-  title,
-  links,
-}: {
-  title: string;
-  links: { label: string; to: string }[];
-}) {
-  return (
-    <div>
-      <h4 className="mb-4 text-xs font-bold uppercase tracking-widest text-foreground">
-        {title}
-      </h4>
-      <ul className="space-y-2.5 text-sm text-muted-foreground">
-        {links.map((l) => (
-          <li key={l.label}>
-            <Link to={l.to} className="transition-colors hover:text-brand">
-              {l.label}
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </div>
   );
 }

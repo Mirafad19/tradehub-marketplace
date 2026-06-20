@@ -9,21 +9,13 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as SellerRouteImport } from './routes/seller'
 import { Route as SellRouteImport } from './routes/sell'
 import { Route as CheckoutRouteImport } from './routes/checkout'
 import { Route as CartRouteImport } from './routes/cart'
-import { Route as AccountRouteImport } from './routes/account'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as SellerRegisterRouteImport } from './routes/seller.register'
 import { Route as ProductsSlugRouteImport } from './routes/products.$slug'
 import { Route as CategorySlugRouteImport } from './routes/category.$slug'
 
-const SellerRoute = SellerRouteImport.update({
-  id: '/seller',
-  path: '/seller',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const SellRoute = SellRouteImport.update({
   id: '/sell',
   path: '/sell',
@@ -39,20 +31,10 @@ const CartRoute = CartRouteImport.update({
   path: '/cart',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AccountRoute = AccountRouteImport.update({
-  id: '/account',
-  path: '/account',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
-} as any)
-const SellerRegisterRoute = SellerRegisterRouteImport.update({
-  id: '/register',
-  path: '/register',
-  getParentRoute: () => SellerRoute,
 } as any)
 const ProductsSlugRoute = ProductsSlugRouteImport.update({
   id: '/products/$slug',
@@ -67,94 +49,67 @@ const CategorySlugRoute = CategorySlugRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/account': typeof AccountRoute
   '/cart': typeof CartRoute
   '/checkout': typeof CheckoutRoute
   '/sell': typeof SellRoute
-  '/seller': typeof SellerRouteWithChildren
   '/category/$slug': typeof CategorySlugRoute
   '/products/$slug': typeof ProductsSlugRoute
-  '/seller/register': typeof SellerRegisterRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/account': typeof AccountRoute
   '/cart': typeof CartRoute
   '/checkout': typeof CheckoutRoute
   '/sell': typeof SellRoute
-  '/seller': typeof SellerRouteWithChildren
   '/category/$slug': typeof CategorySlugRoute
   '/products/$slug': typeof ProductsSlugRoute
-  '/seller/register': typeof SellerRegisterRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/account': typeof AccountRoute
   '/cart': typeof CartRoute
   '/checkout': typeof CheckoutRoute
   '/sell': typeof SellRoute
-  '/seller': typeof SellerRouteWithChildren
   '/category/$slug': typeof CategorySlugRoute
   '/products/$slug': typeof ProductsSlugRoute
-  '/seller/register': typeof SellerRegisterRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/account'
     | '/cart'
     | '/checkout'
     | '/sell'
-    | '/seller'
     | '/category/$slug'
     | '/products/$slug'
-    | '/seller/register'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/account'
     | '/cart'
     | '/checkout'
     | '/sell'
-    | '/seller'
     | '/category/$slug'
     | '/products/$slug'
-    | '/seller/register'
   id:
     | '__root__'
     | '/'
-    | '/account'
     | '/cart'
     | '/checkout'
     | '/sell'
-    | '/seller'
     | '/category/$slug'
     | '/products/$slug'
-    | '/seller/register'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AccountRoute: typeof AccountRoute
   CartRoute: typeof CartRoute
   CheckoutRoute: typeof CheckoutRoute
   SellRoute: typeof SellRoute
-  SellerRoute: typeof SellerRouteWithChildren
   CategorySlugRoute: typeof CategorySlugRoute
   ProductsSlugRoute: typeof ProductsSlugRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/seller': {
-      id: '/seller'
-      path: '/seller'
-      fullPath: '/seller'
-      preLoaderRoute: typeof SellerRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/sell': {
       id: '/sell'
       path: '/sell'
@@ -176,26 +131,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CartRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/account': {
-      id: '/account'
-      path: '/account'
-      fullPath: '/account'
-      preLoaderRoute: typeof AccountRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/': {
       id: '/'
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
-    }
-    '/seller/register': {
-      id: '/seller/register'
-      path: '/register'
-      fullPath: '/seller/register'
-      preLoaderRoute: typeof SellerRegisterRouteImport
-      parentRoute: typeof SellerRoute
     }
     '/products/$slug': {
       id: '/products/$slug'
@@ -214,24 +155,11 @@ declare module '@tanstack/react-router' {
   }
 }
 
-interface SellerRouteChildren {
-  SellerRegisterRoute: typeof SellerRegisterRoute
-}
-
-const SellerRouteChildren: SellerRouteChildren = {
-  SellerRegisterRoute: SellerRegisterRoute,
-}
-
-const SellerRouteWithChildren =
-  SellerRoute._addFileChildren(SellerRouteChildren)
-
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AccountRoute: AccountRoute,
   CartRoute: CartRoute,
   CheckoutRoute: CheckoutRoute,
   SellRoute: SellRoute,
-  SellerRoute: SellerRouteWithChildren,
   CategorySlugRoute: CategorySlugRoute,
   ProductsSlugRoute: ProductsSlugRoute,
 }
