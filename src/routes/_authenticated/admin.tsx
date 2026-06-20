@@ -60,20 +60,18 @@ function AdminPage() {
 
   async function setStatus(id: string, status: "approved" | "rejected" | "suspended") {
     const reason = status === "rejected" ? prompt("Reason for rejection?") : null;
-    const update: Record<string, unknown> = { status };
     if (status === "approved") {
-      update.approved_at = new Date().toISOString();
-      // also grant 'seller' role
-      const seller = sellers.find((x) => x.id === id);
-      if (seller) {
-        const { data: u } = await supabase.from("sellers").select("user_id").eq("id", id).single();
-        if (u) {
-          await supabase.from("user_roles").insert({ user_id: u.user_id, role: "seller" }).select();
-        }
+      const { data: u } = await supabase.from("sellers").select("user_id").eq("id", id).single();
+      if (u) {
+        await supabase.from("user_roles").insert({ user_id: u.user_id, role: "seller" });
       }
     }
-    if (status === "rejected") update.rejected_reason = reason;
-    const { error } = await supabase.from("sellers").update(update).eq("id", id);
+    const { error } =
+      status === "approved"
+        ? await supabase.from("sellers").update({ status, approved_at: new Date().toISOString() }).eq("id", id)
+        : status === "rejected"
+        ? await supabase.from("sellers").update({ status, rejected_reason: reason }).eq("id", id)
+        : await supabase.from("sellers").update({ status }).eq("id", id);
     if (error) return toast.error(error.message);
     toast.success(`Seller ${status}`);
     refresh();

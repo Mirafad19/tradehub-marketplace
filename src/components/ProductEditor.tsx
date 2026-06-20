@@ -60,7 +60,7 @@ export default function ProductEditor({
               ? String(Math.round(data.original_price_kobo / 100))
               : "",
             stock: String(data.stock),
-            status: data.status,
+            status: data.status === "active" ? "active" : "draft",
           });
           setImages(data.image_urls ?? []);
         }
