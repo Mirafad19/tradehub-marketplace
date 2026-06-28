@@ -4,6 +4,7 @@ import { ShieldCheck, Truck, BadgeCheck, Search, Store } from "lucide-react";
 import { SiteLayout } from "@/components/SiteLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { formatNaira } from "@/lib/format";
+import { productImageUrl } from "@/lib/product-images";
 
 export const Route = createFileRoute("/")({
   validateSearch: (s: Record<string, unknown>) => ({
@@ -110,8 +111,8 @@ function HomePage() {
               <Store className="h-8 w-8 opacity-80" />
               <div className="mt-4 font-display text-2xl font-semibold">Are you a member?</div>
               <p className="mt-2 text-sm opacity-90">
-                List your goods, snacks, fashion, phones, services — and reach
-                fellow members across Nigeria.
+                Open a shop, upload real product photos, set your prices and
+                manage orders from your private seller dashboard.
               </p>
             </div>
             <Link
@@ -184,7 +185,7 @@ function HomePage() {
 }
 
 export function ProductCardDB({ p }: { p: ProductRow }) {
-  const img = p.image_urls?.[0];
+  const img = productImageUrl(p.image_urls?.[0]);
   return (
     <Link
       to="/products/$slug"

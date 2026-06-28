@@ -5,9 +5,12 @@ import { toast } from "sonner";
 import { SiteLayout } from "@/components/SiteLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
-import { slugify, nairaToKobo } from "@/lib/format";
+import { nairaToKobo } from "@/lib/format";
+import { productImageUrl } from "@/lib/product-images";
+import { saveProduct } from "@/lib/marketplace.functions";
 
 type Cat = { id: string; name: string };
+type SellerInfo = { id: string; status: string };
 
 export default function ProductEditor({
   mode,
@@ -21,6 +24,7 @@ export default function ProductEditor({
   const { user } = useAuth();
   const [cats, setCats] = useState<Cat[]>([]);
   const [sellerId, setSellerId] = useState<string | null>(null);
+  const [sellerStatus, setSellerStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(mode === "edit");
   const [images, setImages] = useState<string[]>([]);
@@ -39,10 +43,12 @@ export default function ProductEditor({
       if (!user) return;
       const [{ data: c }, { data: s }] = await Promise.all([
         supabase.from("categories").select("id,name").order("sort_order"),
-        supabase.from("sellers").select("id").eq("user_id", user.id).maybeSingle(),
+        supabase.from("sellers").select("id,status").eq("user_id", user.id).maybeSingle(),
       ]);
       setCats((c ?? []) as Cat[]);
-      setSellerId(s?.id ?? null);
+      const seller = s as SellerInfo | null;
+      setSellerId(seller?.id ?? null);
+      setSellerStatus(seller?.status ?? null);
 
       if (mode === "edit" && productId) {
         const { data } = await supabase
@@ -80,8 +86,7 @@ export default function ProductEditor({
       toast.error(error.message);
       return;
     }
-    const { data } = supabase.storage.from("product-images").getPublicUrl(path);
-    setImages((imgs) => [...imgs, data.publicUrl]);
+    setImages((imgs) => [...imgs, path]);
   }
 
   async function handleFileInput(e: React.ChangeEvent<HTMLInputElement>) {
@@ -98,7 +103,7 @@ export default function ProductEditor({
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!sellerId) {
+    if (!sellerId || sellerStatus !== "approved") {
       toast.error("You must be an approved seller first.");
       return;
     }
@@ -108,29 +113,26 @@ export default function ProductEditor({
     }
     setBusy(true);
     try {
+      const price = parseFloat(form.price_naira);
+      const originalPrice = form.original_price_naira ? parseFloat(form.original_price_naira) : null;
+      const stock = parseInt(form.stock, 10);
+      if (!Number.isFinite(price) || price <= 0) throw new Error("Enter a valid product price");
+      if (originalPrice !== null && (!Number.isFinite(originalPrice) || originalPrice < 0)) throw new Error("Enter a valid original price");
+      if (!Number.isInteger(stock) || stock < 0) throw new Error("Enter a valid stock quantity");
+
       const payload = {
-        seller_id: sellerId,
+        id: mode === "edit" ? productId : undefined,
         category_id: form.category_id || null,
         name: form.name,
         description: form.description,
-        price_kobo: nairaToKobo(parseFloat(form.price_naira)),
-        original_price_kobo: form.original_price_naira
-          ? nairaToKobo(parseFloat(form.original_price_naira))
-          : null,
-        stock: parseInt(form.stock, 10),
+        price_kobo: nairaToKobo(price),
+        original_price_kobo: originalPrice === null ? null : nairaToKobo(originalPrice),
+        stock,
         status: form.status,
         image_urls: images,
       };
-      if (mode === "create") {
-        const slug = `${slugify(form.name)}-${Math.random().toString(36).slice(2, 6)}`;
-        const { error } = await supabase.from("products").insert({ ...payload, slug });
-        if (error) throw error;
-        toast.success("Product created");
-      } else {
-        const { error } = await supabase.from("products").update(payload).eq("id", productId!);
-        if (error) throw error;
-        toast.success("Product updated");
-      }
+      await saveProduct({ data: payload });
+      toast.success(mode === "create" ? "Product created" : "Product updated");
       onDone();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to save";
@@ -148,11 +150,18 @@ export default function ProductEditor({
     );
   }
 
-  if (!sellerId) {
+  if (!sellerId || sellerStatus !== "approved") {
     return (
       <SiteLayout>
         <div className="mx-auto max-w-2xl px-4 py-16 text-center sm:px-6">
-          <h1 className="font-display text-2xl font-semibold">Apply as a seller first</h1>
+          <h1 className="font-display text-2xl font-semibold">
+            {sellerId ? "Seller approval required" : "Apply as a seller first"}
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {sellerId
+              ? "Your shop must be approved by an admin before you can upload products."
+              : "Create a seller profile before adding products to RCCGTradeHUB."}
+          </p>
           <Link to="/seller" className="mt-4 inline-block rounded-full bg-brand px-5 py-2 text-sm font-semibold text-brand-foreground hover:bg-brand/90">
             Go to seller dashboard
           </Link>
@@ -177,7 +186,7 @@ export default function ProductEditor({
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {images.map((url) => (
                 <div key={url} className="group relative aspect-square overflow-hidden rounded-lg bg-muted ring-1 ring-border">
-                  <img src={url} alt="" className="h-full w-full object-cover" />
+                  {productImageUrl(url) ? <img src={productImageUrl(url)!} alt="" className="h-full w-full object-cover" /> : null}
                   <button
                     type="button"
                     onClick={() => setImages((i) => i.filter((u) => u !== url))}

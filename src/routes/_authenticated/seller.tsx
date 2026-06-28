@@ -5,7 +5,14 @@ import { toast } from "sonner";
 import { SiteLayout } from "@/components/SiteLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
-import { formatNaira, slugify } from "@/lib/format";
+import { formatNaira } from "@/lib/format";
+import { productImageUrl } from "@/lib/product-images";
+import {
+  deleteSellerProduct,
+  setSellerProductStatus,
+  submitSellerApplication,
+  updateSellerOrderItemStatus,
+} from "@/lib/marketplace.functions";
 
 export const Route = createFileRoute("/_authenticated/seller")({
   component: SellerDashboard,
@@ -18,7 +25,13 @@ type Seller = {
   status: "pending" | "approved" | "rejected" | "suspended";
   description: string | null;
   logo_url: string | null;
+  contact_person: string;
   contact_phone: string;
+  contact_email: string;
+  business_address: string;
+  bank_name: string | null;
+  bank_account_number: string | null;
+  bank_account_name: string | null;
   rejected_reason: string | null;
 };
 
@@ -28,24 +41,35 @@ type Product = {
   slug: string;
   price_kobo: number;
   stock: number;
-  status: "draft" | "active" | "archived";
+  status: "draft" | "active" | "archived" | "out_of_stock";
   image_urls: string[];
 };
 
-type Order = {
+type SellerOrderItem = {
+  id: string;
+  product_name: string;
+  quantity: number;
+  line_total_kobo: number;
+  fulfillment_status: "pending_payment" | "paid" | "processing" | "shipped" | "delivered" | "cancelled" | "refunded";
+};
+
+type SellerOrder = {
   id: string;
   order_number: string;
   status: string;
+  payment_status: string;
   total_kobo: number;
   buyer_name: string;
+  buyer_phone: string;
   created_at: string;
+  items: SellerOrderItem[];
 };
 
 function SellerDashboard() {
   const { user } = useAuth();
   const [seller, setSeller] = useState<Seller | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [orders, setOrders] = useState<SellerOrder[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -57,7 +81,7 @@ function SellerDashboard() {
     setLoading(true);
     const { data: s } = await supabase
       .from("sellers")
-      .select("id,business_name,slug,status,description,logo_url,contact_phone,rejected_reason")
+      .select("id,business_name,slug,status,description,logo_url,contact_person,contact_phone,contact_email,business_address,bank_name,bank_account_number,bank_account_name,rejected_reason")
       .eq("user_id", user!.id)
       .maybeSingle();
     setSeller(s as Seller);
@@ -70,13 +94,23 @@ function SellerDashboard() {
           .order("created_at", { ascending: false }),
         supabase
           .from("order_items")
-          .select("order_id,orders(id,order_number,status,total_kobo,buyer_name,created_at)")
-          .eq("seller_id", s.id),
+          .select("id,product_name,quantity,line_total_kobo,fulfillment_status,orders(id,order_number,status,payment_status,total_kobo,buyer_name,buyer_phone,created_at)")
+          .eq("seller_id", s.id)
+          .order("created_at", { ascending: false }),
       ]);
       setProducts((p ?? []) as Product[]);
-      const map = new Map<string, Order>();
-      ((o ?? []) as Array<{ orders: Order | null }>).forEach((row) => {
-        if (row.orders) map.set(row.orders.id, row.orders);
+      const map = new Map<string, SellerOrder>();
+      ((o ?? []) as Array<SellerOrderItem & { orders: Omit<SellerOrder, "items"> | null }>).forEach((row) => {
+        if (!row.orders) return;
+        const existing = map.get(row.orders.id) ?? { ...row.orders, items: [] };
+        existing.items.push({
+          id: row.id,
+          product_name: row.product_name,
+          quantity: row.quantity,
+          line_total_kobo: row.line_total_kobo,
+          fulfillment_status: row.fulfillment_status,
+        });
+        map.set(row.orders.id, existing);
       });
       setOrders(Array.from(map.values()).sort((a, b) => b.created_at.localeCompare(a.created_at)));
     }
@@ -140,10 +174,15 @@ function SellerDashboard() {
                 <p className="mt-1 text-sm text-muted-foreground">
                   {seller.rejected_reason ?? "Please contact support."}
                 </p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Update your details below and submit again for a fresh review.
+                </p>
               </div>
             </div>
           </div>
         )}
+
+        {seller.status === "rejected" && <SellerApplyForm onCreated={refresh} existing={seller} compact />}
 
         <div className="grid gap-3 sm:grid-cols-3">
           <StatCard icon={Package} label="Products" value={products.length} />
@@ -194,20 +233,15 @@ function SellerDashboard() {
                   <tr>
                     <th className="p-3">Order</th>
                     <th className="p-3">Buyer</th>
-                    <th className="p-3">Total</th>
-                    <th className="p-3">Status</th>
+                    <th className="p-3">Items</th>
+                    <th className="p-3">Payment</th>
+                    <th className="p-3">Fulfillment</th>
                     <th className="p-3">Date</th>
                   </tr>
                 </thead>
                 <tbody>
                   {orders.map((o) => (
-                    <tr key={o.id} className="border-t border-border">
-                      <td className="p-3 font-mono text-xs">{o.order_number}</td>
-                      <td className="p-3">{o.buyer_name}</td>
-                      <td className="p-3 font-semibold">{formatNaira(o.total_kobo)}</td>
-                      <td className="p-3"><span className="rounded-full bg-muted px-2 py-0.5 text-xs">{o.status}</span></td>
-                      <td className="p-3 text-muted-foreground">{new Date(o.created_at).toLocaleDateString()}</td>
-                    </tr>
+                    <OrderRow key={o.id} order={o} onChange={refresh} />
                   ))}
                 </tbody>
               </table>
@@ -247,25 +281,31 @@ function StatusBadge({ status }: { status: Seller["status"] }) {
 function ProductRow({ p, onChange }: { p: Product; onChange: () => void }) {
   const navigate = useNavigate();
   async function toggle() {
-    const next = p.status === "active" ? "draft" : "active";
-    const { error } = await supabase.from("products").update({ status: next }).eq("id", p.id);
-    if (error) return toast.error(error.message);
-    toast.success(next === "active" ? "Published" : "Unpublished");
-    onChange();
+    try {
+      const next = p.status === "active" ? "draft" : "active";
+      await setSellerProductStatus({ data: { id: p.id, status: next } });
+      toast.success(next === "active" ? "Published" : "Unpublished");
+      onChange();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not update product");
+    }
   }
   async function remove() {
     if (!confirm(`Delete "${p.name}"?`)) return;
-    const { error } = await supabase.from("products").delete().eq("id", p.id);
-    if (error) return toast.error(error.message);
-    toast.success("Deleted");
-    onChange();
+    try {
+      const res = await deleteSellerProduct({ data: { id: p.id } });
+      toast.success(res.archived ? "Product archived because it has order history" : "Deleted");
+      onChange();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not delete product");
+    }
   }
   return (
     <tr className="border-t border-border">
       <td className="p-3">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 overflow-hidden rounded-md bg-muted">
-            {p.image_urls?.[0] ? <img src={p.image_urls[0]} alt="" className="h-full w-full object-cover" /> : null}
+            {productImageUrl(p.image_urls?.[0]) ? <img src={productImageUrl(p.image_urls?.[0])!} alt="" className="h-full w-full object-cover" /> : null}
           </div>
           <span className="font-medium">{p.name}</span>
         </div>
@@ -291,19 +331,79 @@ function ProductRow({ p, onChange }: { p: Product; onChange: () => void }) {
   );
 }
 
-function SellerApplyForm({ onCreated }: { onCreated: () => void }) {
+function OrderRow({ order, onChange }: { order: SellerOrder; onChange: () => void }) {
+  async function updateItem(order_item_id: string, status: "processing" | "shipped" | "delivered" | "cancelled") {
+    try {
+      await updateSellerOrderItemStatus({ data: { order_item_id, status } });
+      toast.success("Order updated");
+      onChange();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not update order");
+    }
+  }
+
+  return (
+    <tr className="border-t border-border align-top">
+      <td className="p-3">
+        <div className="font-mono text-xs">{order.order_number}</div>
+        <div className="mt-1 font-semibold">{formatNaira(order.total_kobo)}</div>
+        <div className="mt-1 text-xs text-muted-foreground capitalize">Order: {order.status.replace("_", " ")}</div>
+      </td>
+      <td className="p-3">
+        <div className="font-medium">{order.buyer_name}</div>
+        <div className="text-xs text-muted-foreground">{order.buyer_phone}</div>
+      </td>
+      <td className="p-3">
+        <ul className="space-y-2">
+          {order.items.map((item) => (
+            <li key={item.id}>
+              <div className="font-medium">{item.product_name} × {item.quantity}</div>
+              <div className="text-xs text-muted-foreground">{formatNaira(item.line_total_kobo)}</div>
+            </li>
+          ))}
+        </ul>
+      </td>
+      <td className="p-3">
+        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${order.payment_status === "paid" ? "bg-success/15 text-success" : "bg-warning/15 text-warning-foreground"}`}>
+          {order.payment_status.replace("_", " ")}
+        </span>
+      </td>
+      <td className="p-3">
+        <div className="space-y-2">
+          {order.items.map((item) => (
+            <select
+              key={item.id}
+              value={item.fulfillment_status === "paid" || item.fulfillment_status === "pending_payment" ? "processing" : item.fulfillment_status}
+              onChange={(e) => updateItem(item.id, e.target.value as "processing" | "shipped" | "delivered" | "cancelled")}
+              disabled={item.fulfillment_status === "pending_payment"}
+              className="w-full rounded-md border border-border bg-card px-2 py-1 text-xs outline-none disabled:opacity-50"
+            >
+              <option value="processing">Processing</option>
+              <option value="shipped">Shipped</option>
+              <option value="delivered">Delivered</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          ))}
+        </div>
+      </td>
+      <td className="p-3 text-muted-foreground">{new Date(order.created_at).toLocaleDateString()}</td>
+    </tr>
+  );
+}
+
+function SellerApplyForm({ onCreated, existing, compact }: { onCreated: () => void; existing?: Partial<Seller>; compact?: boolean }) {
   const { user } = useAuth();
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState({
-    business_name: "",
-    contact_person: "",
-    contact_phone: "",
-    contact_email: user?.email ?? "",
-    business_address: "",
-    description: "",
-    bank_name: "",
-    bank_account_number: "",
-    bank_account_name: "",
+    business_name: existing?.business_name ?? "",
+    contact_person: existing?.contact_person ?? "",
+    contact_phone: existing?.contact_phone ?? "",
+    contact_email: existing?.contact_email ?? user?.email ?? "",
+    business_address: existing?.business_address ?? "",
+    description: existing?.description ?? "",
+    bank_name: existing?.bank_name ?? "",
+    bank_account_number: existing?.bank_account_number ?? "",
+    bank_account_name: existing?.bank_account_name ?? "",
   });
 
   async function submit(e: React.FormEvent) {
@@ -311,15 +411,8 @@ function SellerApplyForm({ onCreated }: { onCreated: () => void }) {
     if (!user) return;
     setBusy(true);
     try {
-      const base = slugify(form.business_name);
-      const slug = `${base}-${Math.random().toString(36).slice(2, 6)}`;
-      const { error } = await supabase.from("sellers").insert({
-        ...form,
-        slug,
-        user_id: user.id,
-      });
-      if (error) throw error;
-      toast.success("Application submitted! Awaiting admin approval.");
+      const seller = await submitSellerApplication({ data: form });
+      toast.success(seller.status === "approved" ? "Seller account ready. You can add products now." : "Application submitted. Admin can approve it from the admin dashboard.");
       onCreated();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to submit";
@@ -329,17 +422,17 @@ function SellerApplyForm({ onCreated }: { onCreated: () => void }) {
     }
   }
 
-  return (
-    <SiteLayout>
-      <div className="mx-auto max-w-2xl px-4 py-12 sm:px-6">
+  const content = (
+      <div className={`mx-auto max-w-2xl px-4 sm:px-6 ${compact ? "py-0" : "py-12"}`}>
         <span className="inline-flex items-center gap-2 rounded-full bg-brand-soft px-3 py-1 text-xs font-semibold text-brand">
           Seller application
         </span>
-        <h1 className="mt-4 font-display text-3xl font-semibold">Become a seller</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Tell us about your business. Our admin team reviews applications
-          within 24 hours.
-        </p>
+        {!compact && <h1 className="mt-4 font-display text-3xl font-semibold">Become a seller</h1>}
+        {!compact && (
+          <p className="mt-2 text-sm text-muted-foreground">
+            Tell us about your shop. Admin approval unlocks product uploads, order management and payouts.
+          </p>
+        )}
 
         <form onSubmit={submit} className="mt-8 space-y-5 rounded-2xl bg-card p-6 ring-1 ring-border">
           <h2 className="font-display text-lg font-semibold">Business</h2>
@@ -372,12 +465,13 @@ function SellerApplyForm({ onCreated }: { onCreated: () => void }) {
             disabled={busy}
             className="w-full rounded-full bg-brand py-3 text-sm font-semibold text-brand-foreground hover:bg-brand/90 disabled:opacity-50"
           >
-            {busy ? "Submitting…" : "Submit application"}
+             {busy ? "Submitting…" : compact ? "Resubmit application" : "Submit application"}
           </button>
         </form>
       </div>
-    </SiteLayout>
   );
+
+  return compact ? content : <SiteLayout>{content}</SiteLayout>;
 }
 
 function Field({

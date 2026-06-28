@@ -3,6 +3,7 @@ import { Minus, Plus, Trash2, ShoppingBag, Store } from "lucide-react";
 import { SiteLayout } from "@/components/SiteLayout";
 import { useCart, updateQuantity, removeFromCart } from "@/lib/cart-store";
 import { formatNaira } from "@/lib/format";
+import { productImageUrl } from "@/lib/product-images";
 
 export const Route = createFileRoute("/cart")({
   head: () => ({ meta: [{ title: "Your cart — RCCGTradeHUB" }] }),
@@ -47,7 +48,7 @@ function CartPage() {
               >
                 <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg bg-muted">
                   {it.imageUrl ? (
-                    <img src={it.imageUrl} alt={it.name} className="h-full w-full object-cover" />
+                    <img src={productImageUrl(it.imageUrl) ?? it.imageUrl} alt={it.name} className="h-full w-full object-cover" />
                   ) : (
                     <div className="grid h-full w-full place-items-center text-muted-foreground">
                       <Store className="h-6 w-6" />

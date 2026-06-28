@@ -24,9 +24,8 @@ function SellPage() {
             Turn your church community<br /> into your customer base.
           </h1>
           <p className="mt-4 max-w-2xl text-base opacity-90 sm:text-lg">
-            Sell snacks, fashion, phones, generators, services — anything you
-            offer — to fellow members across Nigeria. We handle the storefront,
-            payments and trust.
+            Open a verified seller account, upload your real products with
+            photos, receive orders, and manage buyer payments from one dashboard.
           </p>
           <Link
             to="/seller"

@@ -27,17 +27,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
+      setLoading(true);
       setSession(s);
       if (s?.user) {
         // defer to avoid recursive supabase calls inside listener
-        setTimeout(() => loadRoles(s.user.id), 0);
+        setTimeout(async () => {
+          await loadRoles(s.user.id);
+          setLoading(false);
+        }, 0);
       } else {
         setRoles([]);
+        setLoading(false);
       }
     });
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(async ({ data }) => {
       setSession(data.session);
-      if (data.session?.user) loadRoles(data.session.user.id);
+      if (data.session?.user) await loadRoles(data.session.user.id);
       setLoading(false);
     });
     return () => sub.subscription.unsubscribe();

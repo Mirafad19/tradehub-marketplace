@@ -14,7 +14,7 @@ export const initPaystackPayment = createServerFn({ method: "POST" })
     if (error) throw error;
     if (order.buyer_id !== userId) throw new Error("Forbidden");
 
-    const secret = process.env.PAYSTACK_KEY;
+    const secret = process.env.PAYSTACK_SECRET_KEY || process.env.PAYSTACK_KEY;
     if (!secret) throw new Error("Paystack not configured");
 
     const callbackUrl = `${data.origin}/api/public/paystack/callback?order=${order.id}`;

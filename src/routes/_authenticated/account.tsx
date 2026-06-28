@@ -5,6 +5,7 @@ import { SiteLayout } from "@/components/SiteLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { formatNaira } from "@/lib/format";
+import { productImageUrl } from "@/lib/product-images";
 
 export const Route = createFileRoute("/_authenticated/account")({
   component: AccountPage,
@@ -80,7 +81,7 @@ function AccountPage() {
                   {o.order_items.map((it, i) => (
                     <li key={i} className="flex items-center gap-3">
                       <div className="h-10 w-10 overflow-hidden rounded-md bg-muted">
-                        {it.product_image_url ? <img src={it.product_image_url} alt="" className="h-full w-full object-cover" /> : null}
+                        {productImageUrl(it.product_image_url) ? <img src={productImageUrl(it.product_image_url)!} alt="" className="h-full w-full object-cover" /> : null}
                       </div>
                       <span className="flex-1 truncate">{it.product_name}</span>
                       <span className="text-muted-foreground">× {it.quantity}</span>

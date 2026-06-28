@@ -20,6 +20,7 @@ import { Route as CategorySlugRouteImport } from './routes/category.$slug'
 import { Route as AuthenticatedSellerRouteImport } from './routes/_authenticated/seller'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedAccountRouteImport } from './routes/_authenticated/account'
+import { Route as ApiPublicProductImageRouteImport } from './routes/api/public/product-image'
 import { Route as ApiPublicPaystackCallbackRouteImport } from './routes/api/public/paystack.callback'
 import { Route as AuthenticatedSellerProductsNewRouteImport } from './routes/_authenticated/seller.products.new'
 import { Route as AuthenticatedSellerProductsIdRouteImport } from './routes/_authenticated/seller.products.$id'
@@ -78,6 +79,11 @@ const AuthenticatedAccountRoute = AuthenticatedAccountRouteImport.update({
   path: '/account',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const ApiPublicProductImageRoute = ApiPublicProductImageRouteImport.update({
+  id: '/api/public/product-image',
+  path: '/api/public/product-image',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicPaystackCallbackRoute =
   ApiPublicPaystackCallbackRouteImport.update({
     id: '/api/public/paystack/callback',
@@ -108,6 +114,7 @@ export interface FileRoutesByFullPath {
   '/seller': typeof AuthenticatedSellerRouteWithChildren
   '/category/$slug': typeof CategorySlugRoute
   '/products/$slug': typeof ProductsSlugRoute
+  '/api/public/product-image': typeof ApiPublicProductImageRoute
   '/seller/products/$id': typeof AuthenticatedSellerProductsIdRoute
   '/seller/products/new': typeof AuthenticatedSellerProductsNewRoute
   '/api/public/paystack/callback': typeof ApiPublicPaystackCallbackRoute
@@ -123,6 +130,7 @@ export interface FileRoutesByTo {
   '/seller': typeof AuthenticatedSellerRouteWithChildren
   '/category/$slug': typeof CategorySlugRoute
   '/products/$slug': typeof ProductsSlugRoute
+  '/api/public/product-image': typeof ApiPublicProductImageRoute
   '/seller/products/$id': typeof AuthenticatedSellerProductsIdRoute
   '/seller/products/new': typeof AuthenticatedSellerProductsNewRoute
   '/api/public/paystack/callback': typeof ApiPublicPaystackCallbackRoute
@@ -140,6 +148,7 @@ export interface FileRoutesById {
   '/_authenticated/seller': typeof AuthenticatedSellerRouteWithChildren
   '/category/$slug': typeof CategorySlugRoute
   '/products/$slug': typeof ProductsSlugRoute
+  '/api/public/product-image': typeof ApiPublicProductImageRoute
   '/_authenticated/seller/products/$id': typeof AuthenticatedSellerProductsIdRoute
   '/_authenticated/seller/products/new': typeof AuthenticatedSellerProductsNewRoute
   '/api/public/paystack/callback': typeof ApiPublicPaystackCallbackRoute
@@ -157,6 +166,7 @@ export interface FileRouteTypes {
     | '/seller'
     | '/category/$slug'
     | '/products/$slug'
+    | '/api/public/product-image'
     | '/seller/products/$id'
     | '/seller/products/new'
     | '/api/public/paystack/callback'
@@ -172,6 +182,7 @@ export interface FileRouteTypes {
     | '/seller'
     | '/category/$slug'
     | '/products/$slug'
+    | '/api/public/product-image'
     | '/seller/products/$id'
     | '/seller/products/new'
     | '/api/public/paystack/callback'
@@ -188,6 +199,7 @@ export interface FileRouteTypes {
     | '/_authenticated/seller'
     | '/category/$slug'
     | '/products/$slug'
+    | '/api/public/product-image'
     | '/_authenticated/seller/products/$id'
     | '/_authenticated/seller/products/new'
     | '/api/public/paystack/callback'
@@ -202,6 +214,7 @@ export interface RootRouteChildren {
   SellRoute: typeof SellRoute
   CategorySlugRoute: typeof CategorySlugRoute
   ProductsSlugRoute: typeof ProductsSlugRoute
+  ApiPublicProductImageRoute: typeof ApiPublicProductImageRoute
   ApiPublicPaystackCallbackRoute: typeof ApiPublicPaystackCallbackRoute
 }
 
@@ -284,6 +297,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAccountRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/public/product-image': {
+      id: '/api/public/product-image'
+      path: '/api/public/product-image'
+      fullPath: '/api/public/product-image'
+      preLoaderRoute: typeof ApiPublicProductImageRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/paystack/callback': {
       id: '/api/public/paystack/callback'
       path: '/api/public/paystack/callback'
@@ -345,18 +365,9 @@ const rootRouteChildren: RootRouteChildren = {
   SellRoute: SellRoute,
   CategorySlugRoute: CategorySlugRoute,
   ProductsSlugRoute: ProductsSlugRoute,
+  ApiPublicProductImageRoute: ApiPublicProductImageRoute,
   ApiPublicPaystackCallbackRoute: ApiPublicPaystackCallbackRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
