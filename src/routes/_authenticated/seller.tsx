@@ -3,12 +3,12 @@ import { useEffect, useState } from "react";
 import { Plus, Package, Clock, CheckCircle2, XCircle, Pencil, Trash2, Store } from "lucide-react";
 import { toast } from "sonner";
 import { SiteLayout } from "@/components/SiteLayout";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { formatNaira } from "@/lib/format";
 import { productImageUrl } from "@/lib/product-images";
 import {
   deleteSellerProduct,
+  getSellerDashboard,
   setSellerProductStatus,
   submitSellerApplication,
   updateSellerOrderItemStatus,
@@ -79,28 +79,18 @@ function SellerDashboard() {
 
   async function refresh() {
     setLoading(true);
-    const { data: s } = await supabase
-      .from("sellers")
-      .select("id,business_name,slug,status,description,logo_url,contact_person,contact_phone,contact_email,business_address,bank_name,bank_account_number,bank_account_name,rejected_reason")
-      .eq("user_id", user!.id)
-      .maybeSingle();
-    setSeller(s as Seller);
-    if (s) {
-      const [{ data: p }, { data: o }] = await Promise.all([
-        supabase
-          .from("products")
-          .select("id,name,slug,price_kobo,stock,status,image_urls")
-          .eq("seller_id", s.id)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("order_items")
-          .select("id,product_name,quantity,line_total_kobo,fulfillment_status,orders(id,order_number,status,payment_status,total_kobo,buyer_name,buyer_phone,created_at)")
-          .eq("seller_id", s.id)
-          .order("created_at", { ascending: false }),
-      ]);
-      setProducts((p ?? []) as Product[]);
+    try {
+      const data = await getSellerDashboard();
+      const s = data.seller as Seller | null;
+      setSeller(s);
+      if (!s) {
+        setProducts([]);
+        setOrders([]);
+        return;
+      }
+      setProducts((data.products ?? []) as Product[]);
       const map = new Map<string, SellerOrder>();
-      ((o ?? []) as Array<SellerOrderItem & { orders: Omit<SellerOrder, "items"> | null }>).forEach((row) => {
+      ((data.orderItems ?? []) as Array<SellerOrderItem & { orders: Omit<SellerOrder, "items"> | null }>).forEach((row) => {
         if (!row.orders) return;
         const existing = map.get(row.orders.id) ?? { ...row.orders, items: [] };
         existing.items.push({
@@ -113,8 +103,11 @@ function SellerDashboard() {
         map.set(row.orders.id, existing);
       });
       setOrders(Array.from(map.values()).sort((a, b) => b.created_at.localeCompare(a.created_at)));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not load seller dashboard");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   if (loading) {
@@ -430,7 +423,7 @@ function SellerApplyForm({ onCreated, existing, compact }: { onCreated: () => vo
         {!compact && <h1 className="mt-4 font-display text-3xl font-semibold">Become a seller</h1>}
         {!compact && (
           <p className="mt-2 text-sm text-muted-foreground">
-            Tell us about your shop. Admin approval unlocks product uploads, order management and payouts.
+            Tell us about your shop. Your seller account opens immediately so you can upload products and manage orders.
           </p>
         )}
 
