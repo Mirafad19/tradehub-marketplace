@@ -103,3 +103,16 @@ export const createOrder = createServerFn({ method: "POST" })
 
     return order;
   });
+
+export const getBuyerOrders = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin
+      .from("orders")
+      .select("id,order_number,status,payment_status,total_kobo,created_at,order_items(product_name,quantity,product_image_url)")
+      .eq("buyer_id", context!.userId)
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return data ?? [];
+  });

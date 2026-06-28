@@ -1,11 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Package } from "lucide-react";
+import { toast } from "sonner";
 import { SiteLayout } from "@/components/SiteLayout";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { formatNaira } from "@/lib/format";
 import { productImageUrl } from "@/lib/product-images";
+import { getBuyerOrders } from "@/lib/orders.functions";
 
 export const Route = createFileRoute("/_authenticated/account")({
   component: AccountPage,
@@ -28,15 +29,10 @@ function AccountPage() {
 
   useEffect(() => {
     if (!user) return;
-    supabase
-      .from("orders")
-      .select("id,order_number,status,payment_status,total_kobo,created_at,order_items(product_name,quantity,product_image_url)")
-      .eq("buyer_id", user.id)
-      .order("created_at", { ascending: false })
-      .then(({ data }) => {
-        setOrders((data ?? []) as unknown as Order[]);
-        setLoading(false);
-      });
+    getBuyerOrders()
+      .then((data) => setOrders((data ?? []) as unknown as Order[]))
+      .catch((err) => toast.error(err instanceof Error ? err.message : "Could not load orders"))
+      .finally(() => setLoading(false));
   }, [user]);
 
   return (
