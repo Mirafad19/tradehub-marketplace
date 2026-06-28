@@ -203,6 +203,63 @@ export const getAdminDashboard = createServerFn({ method: "GET" })
     };
   });
 
+export const getSellerDashboard = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const supabaseAdmin = await adminClient();
+    const { data: seller, error: sellerError } = await supabaseAdmin
+      .from("sellers")
+      .select("id,business_name,slug,status,description,logo_url,contact_person,contact_phone,contact_email,business_address,bank_name,bank_account_number,bank_account_name,rejected_reason")
+      .eq("user_id", context!.userId)
+      .maybeSingle();
+    if (sellerError) throw sellerError;
+    if (!seller) return { seller: null, products: [], orderItems: [] };
+
+    const [{ data: products, error: productsError }, { data: orderItems, error: orderItemsError }] = await Promise.all([
+      supabaseAdmin
+        .from("products")
+        .select("id,name,slug,price_kobo,stock,status,image_urls")
+        .eq("seller_id", seller.id)
+        .order("created_at", { ascending: false }),
+      supabaseAdmin
+        .from("order_items")
+        .select("id,product_name,quantity,line_total_kobo,fulfillment_status,orders(id,order_number,status,payment_status,total_kobo,buyer_name,buyer_phone,created_at)")
+        .eq("seller_id", seller.id)
+        .order("created_at", { ascending: false }),
+    ]);
+    if (productsError) throw productsError;
+    if (orderItemsError) throw orderItemsError;
+
+    return { seller, products: products ?? [], orderItems: orderItems ?? [] };
+  });
+
+export const getProductEditorData = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { productId?: string | null }) => input)
+  .handler(async ({ data, context }) => {
+    const supabaseAdmin = await adminClient();
+    const [{ data: categories, error: categoriesError }, { data: seller, error: sellerError }] = await Promise.all([
+      supabaseAdmin.from("categories").select("id,name").order("sort_order"),
+      supabaseAdmin.from("sellers").select("id,status").eq("user_id", context!.userId).maybeSingle(),
+    ]);
+    if (categoriesError) throw categoriesError;
+    if (sellerError) throw sellerError;
+
+    let product = null;
+    if (data.productId) {
+      const { data: p, error: productError } = await supabaseAdmin
+        .from("products")
+        .select("*")
+        .eq("id", data.productId)
+        .maybeSingle();
+      if (productError) throw productError;
+      if (p && seller && p.seller_id !== seller.id) throw new Error("You can only edit your own products");
+      product = p;
+    }
+
+    return { categories: categories ?? [], seller, product };
+  });
+
 export const saveProduct = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: ProductInput) => input)
