@@ -5,8 +5,9 @@ export const initPaystackPayment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { order_id: string; origin: string }) => input)
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
-    const { data: order, error } = await supabase
+    const { userId } = context!;
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: order, error } = await supabaseAdmin
       .from("orders")
       .select("id,order_number,total_kobo,buyer_email,buyer_id")
       .eq("id", data.order_id)
@@ -14,7 +15,7 @@ export const initPaystackPayment = createServerFn({ method: "POST" })
     if (error) throw error;
     if (order.buyer_id !== userId) throw new Error("Forbidden");
 
-    const secret = process.env.PAYSTACK_KEY;
+    const secret = process.env.PAYSTACK_SECRET_KEY || process.env.PAYSTACK_KEY;
     if (!secret) throw new Error("Paystack not configured");
 
     const callbackUrl = `${data.origin}/api/public/paystack/callback?order=${order.id}`;
@@ -43,7 +44,7 @@ export const initPaystackPayment = createServerFn({ method: "POST" })
       throw new Error(body.message || "Failed to initialize payment");
     }
 
-    await supabase
+    await supabaseAdmin
       .from("orders")
       .update({ payment_reference: body.data.reference })
       .eq("id", order.id);

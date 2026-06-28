@@ -2,6 +2,8 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
+const CHURCH_ADMIN_EMAIL = "fadahunsi.miracle@gmail.com";
+
 type AuthCtx = {
   user: User | null;
   session: Session | null;
@@ -27,28 +29,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
+      setLoading(true);
       setSession(s);
       if (s?.user) {
         // defer to avoid recursive supabase calls inside listener
-        setTimeout(() => loadRoles(s.user.id), 0);
+        setTimeout(async () => {
+          await loadRoles(s.user.id, s.user.email);
+          setLoading(false);
+        }, 0);
       } else {
         setRoles([]);
+        setLoading(false);
       }
     });
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(async ({ data }) => {
       setSession(data.session);
-      if (data.session?.user) loadRoles(data.session.user.id);
+      if (data.session?.user) await loadRoles(data.session.user.id, data.session.user.email);
       setLoading(false);
     });
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  async function loadRoles(userId: string) {
+  async function loadRoles(userId: string, email?: string) {
     const { data } = await supabase
       .from("user_roles")
       .select("role")
       .eq("user_id", userId);
-    setRoles((data ?? []).map((r) => r.role as string));
+    const nextRoles = (data ?? []).map((r) => r.role as string);
+    const currentEmail = email?.toLowerCase();
+    if (currentEmail === CHURCH_ADMIN_EMAIL && !nextRoles.includes("admin")) {
+      nextRoles.push("admin");
+    }
+    setRoles(nextRoles);
   }
 
   const value: AuthCtx = {

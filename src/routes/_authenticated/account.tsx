@@ -1,10 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Package } from "lucide-react";
+import { toast } from "sonner";
 import { SiteLayout } from "@/components/SiteLayout";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { formatNaira } from "@/lib/format";
+import { productImageUrl } from "@/lib/product-images";
+import { getBuyerOrders } from "@/lib/orders.functions";
 
 export const Route = createFileRoute("/_authenticated/account")({
   component: AccountPage,
@@ -27,15 +29,10 @@ function AccountPage() {
 
   useEffect(() => {
     if (!user) return;
-    supabase
-      .from("orders")
-      .select("id,order_number,status,payment_status,total_kobo,created_at,order_items(product_name,quantity,product_image_url)")
-      .eq("buyer_id", user.id)
-      .order("created_at", { ascending: false })
-      .then(({ data }) => {
-        setOrders((data ?? []) as unknown as Order[]);
-        setLoading(false);
-      });
+    getBuyerOrders()
+      .then((data) => setOrders((data ?? []) as unknown as Order[]))
+      .catch((err) => toast.error(err instanceof Error ? err.message : "Could not load orders"))
+      .finally(() => setLoading(false));
   }, [user]);
 
   return (
@@ -80,7 +77,7 @@ function AccountPage() {
                   {o.order_items.map((it, i) => (
                     <li key={i} className="flex items-center gap-3">
                       <div className="h-10 w-10 overflow-hidden rounded-md bg-muted">
-                        {it.product_image_url ? <img src={it.product_image_url} alt="" className="h-full w-full object-cover" /> : null}
+                        {productImageUrl(it.product_image_url) ? <img src={productImageUrl(it.product_image_url)!} alt="" className="h-full w-full object-cover" /> : null}
                       </div>
                       <span className="flex-1 truncate">{it.product_name}</span>
                       <span className="text-muted-foreground">× {it.quantity}</span>

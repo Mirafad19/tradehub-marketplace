@@ -1,11 +1,12 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { CheckCircle2, XCircle, Shield, Package } from "lucide-react";
+import { CheckCircle2, XCircle, Shield, Package, Store, ShoppingBag, type LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { SiteLayout } from "@/components/SiteLayout";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { formatNaira } from "@/lib/format";
+import { productImageUrl } from "@/lib/product-images";
+import { adminSetProductStatus, adminSetSellerStatus, adminUpdateOrder, getAdminDashboard } from "@/lib/marketplace.functions";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   component: AdminPage,
@@ -19,8 +20,25 @@ type Seller = {
   contact_email: string;
   business_address: string;
   description: string | null;
-  status: string;
+  status: "pending" | "approved" | "rejected" | "suspended";
   created_at: string;
+  rejected_reason: string | null;
+  bank_name: string | null;
+  bank_account_number: string | null;
+  bank_account_name: string | null;
+};
+
+type Product = {
+  id: string;
+  name: string;
+  slug: string;
+  price_kobo: number;
+  stock: number;
+  status: "draft" | "active" | "out_of_stock" | "archived";
+  image_urls: string[];
+  created_at: string;
+  sellers: { business_name: string } | null;
+  categories: { name: string } | null;
 };
 
 type Order = {
@@ -28,17 +46,20 @@ type Order = {
   order_number: string;
   buyer_name: string;
   total_kobo: number;
-  status: string;
-  payment_status: string;
+  status: "pending_payment" | "paid" | "processing" | "shipped" | "delivered" | "cancelled" | "refunded";
+  payment_status: "unpaid" | "awaiting_confirmation" | "paid" | "failed" | "refunded";
+  payment_method: string;
   created_at: string;
 };
 
 function AdminPage() {
   const { isAdmin, loading } = useAuth();
   const navigate = useNavigate();
-  const [tab, setTab] = useState<"sellers" | "orders">("sellers");
+  const [tab, setTab] = useState<"sellers" | "products" | "orders">("sellers");
   const [sellers, setSellers] = useState<Seller[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loading && !isAdmin) navigate({ to: "/" });
@@ -50,31 +71,54 @@ function AdminPage() {
   }, [isAdmin]);
 
   async function refresh() {
-    const [{ data: s }, { data: o }] = await Promise.all([
-      supabase.from("sellers").select("*").order("created_at", { ascending: false }),
-      supabase.from("orders").select("id,order_number,buyer_name,total_kobo,status,payment_status,created_at").order("created_at", { ascending: false }).limit(50),
-    ]);
-    setSellers((s ?? []) as Seller[]);
-    setOrders((o ?? []) as Order[]);
+    try {
+      const data = await getAdminDashboard();
+      setSellers((data.sellers ?? []) as Seller[]);
+      setProducts((data.products ?? []) as unknown as Product[]);
+      setOrders((data.orders ?? []) as Order[]);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not load admin dashboard");
+    }
   }
 
-  async function setStatus(id: string, status: "approved" | "rejected" | "suspended") {
+  async function setStatus(id: string, status: "approved" | "rejected" | "suspended" | "pending") {
     const reason = status === "rejected" ? prompt("Reason for rejection?") : null;
-    if (status === "approved") {
-      const { data: u } = await supabase.from("sellers").select("user_id").eq("id", id).single();
-      if (u) {
-        await supabase.from("user_roles").insert({ user_id: u.user_id, role: "seller" });
-      }
+    setBusyId(id);
+    try {
+      await adminSetSellerStatus({ data: { id, status, reason } });
+      toast.success(`Seller ${status}`);
+      refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not update seller");
+    } finally {
+      setBusyId(null);
     }
-    const { error } =
-      status === "approved"
-        ? await supabase.from("sellers").update({ status, approved_at: new Date().toISOString() }).eq("id", id)
-        : status === "rejected"
-        ? await supabase.from("sellers").update({ status, rejected_reason: reason }).eq("id", id)
-        : await supabase.from("sellers").update({ status }).eq("id", id);
-    if (error) return toast.error(error.message);
-    toast.success(`Seller ${status}`);
-    refresh();
+  }
+
+  async function setProductStatus(id: string, status: "draft" | "active" | "archived") {
+    setBusyId(id);
+    try {
+      await adminSetProductStatus({ data: { id, status } });
+      toast.success(`Product ${status}`);
+      refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not update product");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function updateOrder(id: string, update: { status?: Order["status"]; payment_status?: Order["payment_status"] }) {
+    setBusyId(id);
+    try {
+      await adminUpdateOrder({ data: { id, ...update } });
+      toast.success("Order updated");
+      refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not update order");
+    } finally {
+      setBusyId(null);
+    }
   }
 
   if (loading) return <SiteLayout><div className="mx-auto max-w-3xl px-4 py-16 text-center text-sm text-muted-foreground">Loading…</div></SiteLayout>;
@@ -86,10 +130,16 @@ function AdminPage() {
           <Shield className="h-6 w-6 text-brand" />
           <h1 className="font-display text-3xl font-semibold">Admin</h1>
         </div>
-        <p className="mt-1 text-sm text-muted-foreground">Manage sellers and orders for RCCGTradeHUB.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Approve sellers, moderate products, confirm payments and supervise orders for RCCGTradeHUB.</p>
+
+        <div className="mt-6 grid gap-3 sm:grid-cols-3">
+          <AdminStat icon={Store} label="Sellers" value={sellers.length} />
+          <AdminStat icon={ShoppingBag} label="Products" value={products.length} />
+          <AdminStat icon={Package} label="Orders" value={orders.length} />
+        </div>
 
         <div className="mt-6 flex gap-2 border-b border-border">
-          {(["sellers", "orders"] as const).map((t) => (
+          {(["sellers", "products", "orders"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -118,28 +168,86 @@ function AdminPage() {
                       <div><dt className="inline text-muted-foreground">Contact:</dt> <dd className="inline font-medium">{s.contact_person} · {s.contact_phone}</dd></div>
                       <div><dt className="inline text-muted-foreground">Email:</dt> <dd className="inline font-medium">{s.contact_email}</dd></div>
                       <div className="sm:col-span-2"><dt className="inline text-muted-foreground">Address:</dt> <dd className="inline">{s.business_address}</dd></div>
+                      {(s.bank_name || s.bank_account_number || s.bank_account_name) && (
+                        <div className="sm:col-span-2"><dt className="inline text-muted-foreground">Bank:</dt> <dd className="inline">{[s.bank_name, s.bank_account_number, s.bank_account_name].filter(Boolean).join(" · ")}</dd></div>
+                      )}
+                      {s.rejected_reason && <div className="sm:col-span-2 text-destructive"><dt className="inline">Rejection:</dt> <dd className="inline">{s.rejected_reason}</dd></div>}
                     </dl>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     {s.status !== "approved" && (
-                      <button onClick={() => setStatus(s.id, "approved")} className="inline-flex items-center gap-1.5 rounded-full bg-success px-4 py-2 text-xs font-semibold text-success-foreground hover:opacity-90">
+                      <button disabled={busyId === s.id} onClick={() => setStatus(s.id, "approved")} className="inline-flex items-center gap-1.5 rounded-full bg-success px-4 py-2 text-xs font-semibold text-success-foreground hover:opacity-90 disabled:opacity-50">
                         <CheckCircle2 className="h-4 w-4" /> Approve
                       </button>
                     )}
                     {s.status !== "rejected" && s.status !== "suspended" && (
-                      <button onClick={() => setStatus(s.id, "rejected")} className="inline-flex items-center gap-1.5 rounded-full bg-destructive px-4 py-2 text-xs font-semibold text-destructive-foreground hover:opacity-90">
+                      <button disabled={busyId === s.id} onClick={() => setStatus(s.id, "rejected")} className="inline-flex items-center gap-1.5 rounded-full bg-destructive px-4 py-2 text-xs font-semibold text-destructive-foreground hover:opacity-90 disabled:opacity-50">
                         <XCircle className="h-4 w-4" /> Reject
                       </button>
                     )}
                     {s.status === "approved" && (
-                      <button onClick={() => setStatus(s.id, "suspended")} className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-4 py-2 text-xs font-semibold hover:bg-muted">
+                      <button disabled={busyId === s.id} onClick={() => setStatus(s.id, "suspended")} className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-4 py-2 text-xs font-semibold hover:bg-muted disabled:opacity-50">
                         Suspend
+                      </button>
+                    )}
+                    {(s.status === "rejected" || s.status === "suspended") && (
+                      <button disabled={busyId === s.id} onClick={() => setStatus(s.id, "pending")} className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-4 py-2 text-xs font-semibold hover:bg-muted disabled:opacity-50">
+                        Move to pending
                       </button>
                     )}
                   </div>
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {tab === "products" && (
+          <div className="mt-6 overflow-hidden rounded-2xl ring-1 ring-border">
+            <table className="w-full text-sm">
+              <thead className="bg-surface text-left text-xs uppercase tracking-wider text-muted-foreground">
+                <tr>
+                  <th className="p-3">Product</th>
+                  <th className="p-3">Seller</th>
+                  <th className="p-3">Price</th>
+                  <th className="p-3">Stock</th>
+                  <th className="p-3">Status</th>
+                  <th className="p-3">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {products.length === 0 && <tr><td colSpan={6} className="p-6 text-center text-muted-foreground"><ShoppingBag className="mx-auto mb-2 h-6 w-6" />No products uploaded yet.</td></tr>}
+                {products.map((p) => {
+                  const img = productImageUrl(p.image_urls?.[0]);
+                  return (
+                    <tr key={p.id} className="border-t border-border">
+                      <td className="p-3">
+                        <div className="flex items-center gap-3">
+                          <div className="h-11 w-11 overflow-hidden rounded-md bg-muted">
+                            {img && <img src={img} alt="" className="h-full w-full object-cover" />}
+                          </div>
+                          <div>
+                            <div className="font-medium">{p.name}</div>
+                            <div className="text-xs text-muted-foreground">{p.categories?.name ?? "Uncategorised"}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-3">{p.sellers?.business_name ?? "—"}</td>
+                      <td className="p-3 font-semibold">{formatNaira(p.price_kobo)}</td>
+                      <td className="p-3">{p.stock}</td>
+                      <td className="p-3"><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${p.status === "active" ? "bg-success/15 text-success" : "bg-muted text-muted-foreground"}`}>{p.status}</span></td>
+                      <td className="p-3">
+                        <div className="flex flex-wrap gap-2">
+                          {p.status !== "active" && <button disabled={busyId === p.id} onClick={() => setProductStatus(p.id, "active")} className="rounded-full bg-success px-3 py-1.5 text-xs font-semibold text-success-foreground disabled:opacity-50">Publish</button>}
+                          {p.status === "active" && <button disabled={busyId === p.id} onClick={() => setProductStatus(p.id, "draft")} className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold hover:bg-muted disabled:opacity-50">Unpublish</button>}
+                          {p.status !== "archived" && <button disabled={busyId === p.id} onClick={() => setProductStatus(p.id, "archived")} className="rounded-full bg-destructive px-3 py-1.5 text-xs font-semibold text-destructive-foreground disabled:opacity-50">Archive</button>}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
 
@@ -153,21 +261,53 @@ function AdminPage() {
                   <th className="p-3">Total</th>
                   <th className="p-3">Status</th>
                   <th className="p-3">Payment</th>
+                  <th className="p-3">Action</th>
                   <th className="p-3">Date</th>
                 </tr>
               </thead>
               <tbody>
-                {orders.length === 0 && <tr><td colSpan={6} className="p-6 text-center text-muted-foreground"><Package className="mx-auto mb-2 h-6 w-6" />No orders yet.</td></tr>}
+                {orders.length === 0 && <tr><td colSpan={7} className="p-6 text-center text-muted-foreground"><Package className="mx-auto mb-2 h-6 w-6" />No orders yet.</td></tr>}
                 {orders.map((o) => (
                   <tr key={o.id} className="border-t border-border">
                     <td className="p-3 font-mono text-xs">{o.order_number}</td>
                     <td className="p-3">{o.buyer_name}</td>
                     <td className="p-3 font-semibold">{formatNaira(o.total_kobo)}</td>
-                    <td className="p-3 capitalize">{o.status.replace("_", " ")}</td>
                     <td className="p-3">
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${o.payment_status === "paid" ? "bg-success/15 text-success" : "bg-warning/15 text-warning-foreground"}`}>
-                        {o.payment_status}
-                      </span>
+                      <select
+                        value={o.status}
+                        disabled={busyId === o.id}
+                        onChange={(e) => updateOrder(o.id, { status: e.target.value as Order["status"] })}
+                        className="rounded-md border border-border bg-card px-2 py-1 text-xs outline-none disabled:opacity-50"
+                      >
+                        <option value="pending_payment">Pending payment</option>
+                        <option value="processing">Processing</option>
+                        <option value="shipped">Shipped</option>
+                        <option value="delivered">Delivered</option>
+                        <option value="cancelled">Cancelled</option>
+                        <option value="refunded">Refunded</option>
+                      </select>
+                    </td>
+                    <td className="p-3">
+                      <select
+                        value={o.payment_status}
+                        disabled={busyId === o.id}
+                        onChange={(e) => updateOrder(o.id, { payment_status: e.target.value as Order["payment_status"] })}
+                        className={`rounded-md border border-border bg-card px-2 py-1 text-xs font-semibold outline-none disabled:opacity-50 ${o.payment_status === "paid" ? "text-success" : "text-warning-foreground"}`}
+                      >
+                        <option value="unpaid">Unpaid</option>
+                        <option value="awaiting_confirmation">Awaiting confirmation</option>
+                        <option value="paid">Paid</option>
+                        <option value="failed">Failed</option>
+                        <option value="refunded">Refunded</option>
+                      </select>
+                      <div className="mt-1 text-[10px] uppercase tracking-wide text-muted-foreground">{o.payment_method.replace("_", " ")}</div>
+                    </td>
+                    <td className="p-3">
+                      {o.payment_status !== "paid" && (
+                        <button disabled={busyId === o.id} onClick={() => updateOrder(o.id, { payment_status: "paid" })} className="rounded-full bg-success px-3 py-1.5 text-xs font-semibold text-success-foreground disabled:opacity-50">
+                          Mark paid
+                        </button>
+                      )}
                     </td>
                     <td className="p-3 text-muted-foreground">{new Date(o.created_at).toLocaleDateString()}</td>
                   </tr>
@@ -178,5 +318,19 @@ function AdminPage() {
         )}
       </div>
     </SiteLayout>
+  );
+}
+
+function AdminStat({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: number }) {
+  return (
+    <div className="flex items-center gap-3 rounded-2xl bg-card p-5 ring-1 ring-border">
+      <div className="grid h-10 w-10 place-items-center rounded-lg bg-brand-soft text-brand">
+        <Icon className="h-5 w-5" />
+      </div>
+      <div>
+        <div className="font-display text-2xl font-semibold">{value}</div>
+        <div className="text-xs text-muted-foreground">{label}</div>
+      </div>
+    </div>
   );
 }

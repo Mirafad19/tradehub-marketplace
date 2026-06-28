@@ -6,6 +6,7 @@ import { SiteLayout } from "@/components/SiteLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { formatNaira } from "@/lib/format";
 import { addToCart } from "@/lib/cart-store";
+import { productImageUrl } from "@/lib/product-images";
 
 export const Route = createFileRoute("/products/$slug")({
   component: ProductPage,
@@ -71,7 +72,7 @@ function ProductPage() {
     );
   }
 
-  const img = product.image_urls?.[imgIdx] ?? product.image_urls?.[0];
+  const img = productImageUrl(product.image_urls?.[imgIdx] ?? product.image_urls?.[0]);
 
   return (
     <SiteLayout>
@@ -109,7 +110,7 @@ function ProductPage() {
                       i === imgIdx ? "ring-brand" : "ring-border"
                     }`}
                   >
-                    <img src={u} alt="" className="h-full w-full object-cover" />
+                    {productImageUrl(u) ? <img src={productImageUrl(u)!} alt="" className="h-full w-full object-cover" /> : null}
                   </button>
                 ))}
               </div>
@@ -165,6 +166,7 @@ function ProductPage() {
                     addToCart(
                       {
                         productId: product.id,
+                        slug: product.slug,
                         sellerId: product.seller_id,
                         name: product.name,
                         priceKobo: product.price_kobo,
@@ -184,6 +186,7 @@ function ProductPage() {
                     addToCart(
                       {
                         productId: product.id,
+                        slug: product.slug,
                         sellerId: product.seller_id,
                         name: product.name,
                         priceKobo: product.price_kobo,
