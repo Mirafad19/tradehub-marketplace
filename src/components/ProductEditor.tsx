@@ -26,7 +26,7 @@ export default function ProductEditor({
   const [sellerId, setSellerId] = useState<string | null>(null);
   const [sellerStatus, setSellerStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [loading, setLoading] = useState(mode === "edit");
+  const [loading, setLoading] = useState(true);
   const [images, setImages] = useState<string[]>([]);
   const [form, setForm] = useState({
     name: "",
@@ -63,8 +63,8 @@ export default function ProductEditor({
           });
           setImages(data.image_urls ?? []);
         }
-        setLoading(false);
       }
+      setLoading(false);
     })();
   }, [user, mode, productId]);
 
