@@ -2,6 +2,8 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
+const CHURCH_ADMIN_EMAIL = "fadahunsi.miracle@gmail.com";
+
 type AuthCtx = {
   user: User | null;
   session: Session | null;
@@ -53,7 +55,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .from("user_roles")
       .select("role")
       .eq("user_id", userId);
-    setRoles((data ?? []).map((r) => r.role as string));
+    const nextRoles = (data ?? []).map((r) => r.role as string);
+    const currentEmail = session?.user?.email?.toLowerCase();
+    if (currentEmail === CHURCH_ADMIN_EMAIL && !nextRoles.includes("admin")) {
+      nextRoles.push("admin");
+    }
+    setRoles(nextRoles);
   }
 
   const value: AuthCtx = {

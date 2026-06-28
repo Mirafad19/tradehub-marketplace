@@ -19,7 +19,7 @@ export const createOrder = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: CreateOrderInput) => input)
   .handler(async ({ data, context }) => {
-    const { userId } = context;
+    const { userId } = context!;
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     if (!data.items.length) throw new Error("Cart is empty");

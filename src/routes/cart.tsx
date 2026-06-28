@@ -56,9 +56,13 @@ function CartPage() {
                   )}
                 </div>
                 <div className="flex-1">
-                  <Link to="/products/$slug" params={{ slug: "" }} className="text-sm font-medium hover:text-brand">
-                    {it.name}
-                  </Link>
+                  {it.slug ? (
+                    <Link to="/products/$slug" params={{ slug: it.slug }} className="text-sm font-medium hover:text-brand">
+                      {it.name}
+                    </Link>
+                  ) : (
+                    <span className="text-sm font-medium">{it.name}</span>
+                  )}
                   <div className="mt-1 text-sm font-semibold text-brand">
                     {formatNaira(it.priceKobo)}
                   </div>

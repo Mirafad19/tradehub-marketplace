@@ -5,7 +5,7 @@ export const initPaystackPayment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { order_id: string; origin: string }) => input)
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
+    const { supabase, userId } = context!;
     const { data: order, error } = await supabase
       .from("orders")
       .select("id,order_number,total_kobo,buyer_email,buyer_id")

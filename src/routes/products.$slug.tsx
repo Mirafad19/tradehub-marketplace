@@ -166,6 +166,7 @@ function ProductPage() {
                     addToCart(
                       {
                         productId: product.id,
+                        slug: product.slug,
                         sellerId: product.seller_id,
                         name: product.name,
                         priceKobo: product.price_kobo,
@@ -185,6 +186,7 @@ function ProductPage() {
                     addToCart(
                       {
                         productId: product.id,
+                        slug: product.slug,
                         sellerId: product.seller_id,
                         name: product.name,
                         priceKobo: product.price_kobo,
