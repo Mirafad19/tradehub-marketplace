@@ -7,7 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { nairaToKobo } from "@/lib/format";
 import { productImageUrl } from "@/lib/product-images";
-import { saveProduct } from "@/lib/marketplace.functions";
+import { getProductEditorData, saveProduct } from "@/lib/marketplace.functions";
 
 type Cat = { id: string; name: string };
 type SellerInfo = { id: string; status: string };
@@ -41,21 +41,14 @@ export default function ProductEditor({
   useEffect(() => {
     (async () => {
       if (!user) return;
-      const [{ data: c }, { data: s }] = await Promise.all([
-        supabase.from("categories").select("id,name").order("sort_order"),
-        supabase.from("sellers").select("id,status").eq("user_id", user.id).maybeSingle(),
-      ]);
-      setCats((c ?? []) as Cat[]);
-      const seller = s as SellerInfo | null;
+      const editorData = await getProductEditorData({ data: { productId: mode === "edit" ? productId : null } });
+      setCats((editorData.categories ?? []) as Cat[]);
+      const seller = editorData.seller as SellerInfo | null;
       setSellerId(seller?.id ?? null);
       setSellerStatus(seller?.status ?? null);
 
       if (mode === "edit" && productId) {
-        const { data } = await supabase
-          .from("products")
-          .select("*")
-          .eq("id", productId)
-          .maybeSingle();
+        const data = editorData.product;
         if (data) {
           setForm({
             name: data.name,
@@ -159,7 +152,7 @@ export default function ProductEditor({
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
             {sellerId
-              ? "Your shop must be approved by an admin before you can upload products."
+              ? "Your shop is suspended or not active. Contact the admin to restore product uploads."
               : "Create a seller profile before adding products to RCCGTradeHUB."}
           </p>
           <Link to="/seller" className="mt-4 inline-block rounded-full bg-brand px-5 py-2 text-sm font-semibold text-brand-foreground hover:bg-brand/90">
