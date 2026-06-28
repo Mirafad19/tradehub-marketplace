@@ -108,7 +108,7 @@ export const submitSellerApplication = createServerFn({ method: "POST" })
   .inputValidator((input: SellerApplicationInput) => input)
   .handler(async ({ data, context }) => {
     const supabaseAdmin = await adminClient();
-    const userId = context.userId;
+    const userId = context!.userId;
     const isAdmin = await userIsAdmin(userId);
 
     const payload = {
@@ -167,7 +167,7 @@ export const saveProduct = createServerFn({ method: "POST" })
   .inputValidator((input: ProductInput) => input)
   .handler(async ({ data, context }) => {
     const supabaseAdmin = await adminClient();
-    const seller = await getApprovedSellerForUser(context.userId);
+    const seller = await getApprovedSellerForUser(context!.userId);
 
     const name = requireText(data.name, "Product name");
     const description = requireText(data.description, "Description");
@@ -235,7 +235,7 @@ export const setSellerProductStatus = createServerFn({ method: "POST" })
   .inputValidator((input: { id: string; status: "draft" | "active" | "archived" }) => input)
   .handler(async ({ data, context }) => {
     const supabaseAdmin = await adminClient();
-    const seller = await getApprovedSellerForUser(context.userId);
+    const seller = await getApprovedSellerForUser(context!.userId);
     const { data: product, error: getError } = await supabaseAdmin
       .from("products")
       .select("id,seller_id,stock,image_urls")
@@ -257,7 +257,7 @@ export const deleteSellerProduct = createServerFn({ method: "POST" })
   .inputValidator((input: { id: string }) => input)
   .handler(async ({ data, context }) => {
     const supabaseAdmin = await adminClient();
-    const seller = await getApprovedSellerForUser(context.userId);
+    const seller = await getApprovedSellerForUser(context!.userId);
     const { data: product, error: getError } = await supabaseAdmin
       .from("products")
       .select("id,seller_id")
@@ -279,7 +279,7 @@ export const updateSellerOrderItemStatus = createServerFn({ method: "POST" })
   .inputValidator((input: { order_item_id: string; status: "processing" | "shipped" | "delivered" | "cancelled" }) => input)
   .handler(async ({ data, context }) => {
     const supabaseAdmin = await adminClient();
-    const seller = await getApprovedSellerForUser(context.userId);
+    const seller = await getApprovedSellerForUser(context!.userId);
     const { data: item, error: itemError } = await supabaseAdmin
       .from("order_items")
       .select("id,order_id,seller_id")
@@ -315,7 +315,8 @@ export const adminSetSellerStatus = createServerFn({ method: "POST" })
   .inputValidator((input: { id: string; status: "approved" | "rejected" | "suspended" | "pending"; reason?: string | null }) => input)
   .handler(async ({ data, context }) => {
     const supabaseAdmin = await adminClient();
-    await requireAdmin(context.userId);
+    const userId = context!.userId;
+    await requireAdmin(userId);
 
     const { data: seller, error: getError } = await supabaseAdmin
       .from("sellers")
@@ -335,7 +336,7 @@ export const adminSetSellerStatus = createServerFn({ method: "POST" })
     };
     if (data.status === "approved") {
       update.approved_at = new Date().toISOString();
-      update.approved_by = context.userId;
+      update.approved_by = userId;
     }
 
     const { error } = await supabaseAdmin.from("sellers").update(update).eq("id", data.id);
@@ -358,7 +359,7 @@ export const adminSetProductStatus = createServerFn({ method: "POST" })
   .inputValidator((input: { id: string; status: "draft" | "active" | "archived" }) => input)
   .handler(async ({ data, context }) => {
     const supabaseAdmin = await adminClient();
-    await requireAdmin(context.userId);
+    await requireAdmin(context!.userId);
     const { error } = await supabaseAdmin.from("products").update({ status: data.status }).eq("id", data.id);
     if (error) throw error;
     return { ok: true };
@@ -369,7 +370,7 @@ export const adminUpdateOrder = createServerFn({ method: "POST" })
   .inputValidator((input: { id: string; status?: OrderStatus; payment_status?: PaymentStatus }) => input)
   .handler(async ({ data, context }) => {
     const supabaseAdmin = await adminClient();
-    await requireAdmin(context.userId);
+    await requireAdmin(context!.userId);
     const { data: existing, error: existingError } = await supabaseAdmin
       .from("orders")
       .select("id,payment_method,payment_status,status")
