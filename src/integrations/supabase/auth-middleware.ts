@@ -5,22 +5,16 @@ import { createClient } from '@supabase/supabase-js'
 import type { Database } from './types'
 import { supabase as browserSupabase } from './client'
 
-
-
-export const requireSupabaseAuth = createMiddleware({ type: 'function' }).server(
-  async ({ next }) => next(),
-);
-
 export const requireSupabaseAuth = createMiddleware({ type: 'function' })
-  .client(async ({ next, headers }) => {
+  .client(async ({ next }) => {
     const { data, error } = await browserSupabase.auth.getSession();
     if (error || !data.session?.access_token) {
       throw new Error('Please sign in again to continue');
     }
 
-    const mergedHeaders = new Headers(headers);
-    mergedHeaders.set('Authorization', `Bearer ${data.session.access_token}`);
-    return next({ headers: mergedHeaders });
+    return next({
+      headers: { Authorization: `Bearer ${data.session.access_token}` },
+    } as never);
   })
   .server(
   async ({ next }) => {
