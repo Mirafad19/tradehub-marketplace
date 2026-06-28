@@ -34,7 +34,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (s?.user) {
         // defer to avoid recursive supabase calls inside listener
         setTimeout(async () => {
-          await loadRoles(s.user.id);
+          await loadRoles(s.user.id, s.user.email);
           setLoading(false);
         }, 0);
       } else {
@@ -44,19 +44,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     supabase.auth.getSession().then(async ({ data }) => {
       setSession(data.session);
-      if (data.session?.user) await loadRoles(data.session.user.id);
+      if (data.session?.user) await loadRoles(data.session.user.id, data.session.user.email);
       setLoading(false);
     });
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  async function loadRoles(userId: string) {
+  async function loadRoles(userId: string, email?: string) {
     const { data } = await supabase
       .from("user_roles")
       .select("role")
       .eq("user_id", userId);
     const nextRoles = (data ?? []).map((r) => r.role as string);
-    const currentEmail = session?.user?.email?.toLowerCase();
+    const currentEmail = email?.toLowerCase();
     if (currentEmail === CHURCH_ADMIN_EMAIL && !nextRoles.includes("admin")) {
       nextRoles.push("admin");
     }
