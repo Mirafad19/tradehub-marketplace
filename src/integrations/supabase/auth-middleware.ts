@@ -3,10 +3,26 @@ import { createMiddleware } from '@tanstack/react-start'
 import { getRequest } from '@tanstack/react-start/server'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from './types'
+import { supabase as browserSupabase } from './client'
 
 
 
 export const requireSupabaseAuth = createMiddleware({ type: 'function' }).server(
+  async ({ next }) => next(),
+);
+
+export const requireSupabaseAuth = createMiddleware({ type: 'function' })
+  .client(async ({ next, headers }) => {
+    const { data, error } = await browserSupabase.auth.getSession();
+    if (error || !data.session?.access_token) {
+      throw new Error('Please sign in again to continue');
+    }
+
+    const mergedHeaders = new Headers(headers);
+    mergedHeaders.set('Authorization', `Bearer ${data.session.access_token}`);
+    return next({ headers: mergedHeaders });
+  })
+  .server(
   async ({ next }) => {
     
     const SUPABASE_URL = process.env.SUPABASE_URL;
