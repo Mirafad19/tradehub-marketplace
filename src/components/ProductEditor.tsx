@@ -41,30 +41,35 @@ export default function ProductEditor({
   useEffect(() => {
     (async () => {
       if (!user) return;
-      const editorData = await getProductEditorData({ data: { productId: mode === "edit" ? productId : null } });
-      setCats((editorData.categories ?? []) as Cat[]);
-      const seller = editorData.seller as SellerInfo | null;
-      setSellerId(seller?.id ?? null);
-      setSellerStatus(seller?.status ?? null);
+      try {
+        const editorData = await getProductEditorData({ data: { productId: mode === "edit" ? productId : null } });
+        setCats((editorData.categories ?? []) as Cat[]);
+        const seller = editorData.seller as SellerInfo | null;
+        setSellerId(seller?.id ?? null);
+        setSellerStatus(seller?.status ?? null);
 
-      if (mode === "edit" && productId) {
-        const data = editorData.product;
-        if (data) {
-          setForm({
-            name: data.name,
-            description: data.description,
-            category_id: data.category_id ?? "",
-            price_naira: String(Math.round(data.price_kobo / 100)),
-            original_price_naira: data.original_price_kobo
-              ? String(Math.round(data.original_price_kobo / 100))
-              : "",
-            stock: String(data.stock),
-            status: data.status === "active" ? "active" : "draft",
-          });
-          setImages(data.image_urls ?? []);
+        if (mode === "edit" && productId) {
+          const data = editorData.product;
+          if (data) {
+            setForm({
+              name: data.name,
+              description: data.description,
+              category_id: data.category_id ?? "",
+              price_naira: String(Math.round(data.price_kobo / 100)),
+              original_price_naira: data.original_price_kobo
+                ? String(Math.round(data.original_price_kobo / 100))
+                : "",
+              stock: String(data.stock),
+              status: data.status === "active" ? "active" : "draft",
+            });
+            setImages(data.image_urls ?? []);
+          }
         }
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Could not load product editor");
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     })();
   }, [user, mode, productId]);
 
@@ -148,7 +153,7 @@ export default function ProductEditor({
       <SiteLayout>
         <div className="mx-auto max-w-2xl px-4 py-16 text-center sm:px-6">
           <h1 className="font-display text-2xl font-semibold">
-            {sellerId ? "Seller approval required" : "Apply as a seller first"}
+            {sellerId ? "Seller account unavailable" : "Apply as a seller first"}
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
             {sellerId
