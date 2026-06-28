@@ -29,6 +29,7 @@ type ProductInput = {
 type OrderStatus = "pending_payment" | "paid" | "processing" | "shipped" | "delivered" | "cancelled" | "refunded";
 type PaymentStatus = "unpaid" | "awaiting_confirmation" | "paid" | "failed" | "refunded";
 type SellerStatus = "pending" | "approved" | "rejected" | "suspended";
+const CHURCH_ADMIN_EMAIL = "fadahunsi.miracle@gmail.com";
 
 async function adminClient() {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -53,7 +54,16 @@ async function userIsAdmin(userId: string) {
     .eq("user_id", userId)
     .eq("role", "admin")
     .maybeSingle();
-  return Boolean(data);
+  if (data) return true;
+
+  const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(userId);
+  const isChurchAdmin = authUser.user?.email?.toLowerCase() === CHURCH_ADMIN_EMAIL;
+  if (isChurchAdmin) {
+    await supabaseAdmin
+      .from("user_roles")
+      .upsert({ user_id: userId, role: "admin" }, { onConflict: "user_id,role", ignoreDuplicates: true });
+  }
+  return isChurchAdmin;
 }
 
 async function requireAdmin(userId: string) {
@@ -130,8 +140,9 @@ export const submitSellerApplication = createServerFn({ method: "POST" })
       .maybeSingle();
     if (existingError) throw existingError;
 
-    const autoApprove = isAdmin;
-    const status: SellerStatus = autoApprove ? "approved" : existing?.status === "approved" ? "approved" : "pending";
+    // Sellers should be able to open a shop and start uploading immediately.
+    // Admins can still reject/suspend sellers from the admin dashboard.
+    const status: SellerStatus = existing?.status === "suspended" && !isAdmin ? "suspended" : "approved";
     const slug = await uniqueSellerSlug(payload.business_name, existing?.id);
 
     const writePayload = {
