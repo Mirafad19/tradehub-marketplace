@@ -3,11 +3,10 @@ import { useEffect, useState } from "react";
 import { CheckCircle2, XCircle, Shield, Package, Store, ShoppingBag, type LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { SiteLayout } from "@/components/SiteLayout";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { formatNaira } from "@/lib/format";
 import { productImageUrl } from "@/lib/product-images";
-import { adminSetProductStatus, adminSetSellerStatus, adminUpdateOrder } from "@/lib/marketplace.functions";
+import { adminSetProductStatus, adminSetSellerStatus, adminUpdateOrder, getAdminDashboard } from "@/lib/marketplace.functions";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   component: AdminPage,
@@ -72,22 +71,14 @@ function AdminPage() {
   }, [isAdmin]);
 
   async function refresh() {
-    const [{ data: s }, { data: p }, { data: o }] = await Promise.all([
-      supabase.from("sellers").select("*").order("created_at", { ascending: false }),
-      supabase
-        .from("products")
-        .select("id,name,slug,price_kobo,stock,status,image_urls,created_at,sellers(business_name),categories(name)")
-        .order("created_at", { ascending: false })
-        .limit(100),
-      supabase
-        .from("orders")
-        .select("id,order_number,buyer_name,total_kobo,status,payment_status,payment_method,created_at")
-        .order("created_at", { ascending: false })
-        .limit(100),
-    ]);
-    setSellers((s ?? []) as Seller[]);
-    setProducts((p ?? []) as unknown as Product[]);
-    setOrders((o ?? []) as Order[]);
+    try {
+      const data = await getAdminDashboard();
+      setSellers((data.sellers ?? []) as Seller[]);
+      setProducts((data.products ?? []) as unknown as Product[]);
+      setOrders((data.orders ?? []) as Order[]);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not load admin dashboard");
+    }
   }
 
   async function setStatus(id: string, status: "approved" | "rejected" | "suspended" | "pending") {

@@ -45,7 +45,7 @@ export const Route = createFileRoute("/api/public/paystack/callback")({
             .from("orders")
             .update({
               payment_status: "paid",
-              status: "paid",
+              status: "processing",
               payment_reference: reference,
             })
             .eq("id", orderId);
@@ -60,6 +60,11 @@ export const Route = createFileRoute("/api/public/paystack/callback")({
               _quantity: it.quantity,
             });
           }
+          await supabaseAdmin
+            .from("order_items")
+            .update({ fulfillment_status: "processing" })
+            .eq("order_id", orderId)
+            .eq("fulfillment_status", "pending_payment");
         }
 
         return Response.redirect(

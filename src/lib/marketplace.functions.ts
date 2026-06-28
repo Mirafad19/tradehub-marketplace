@@ -173,6 +173,36 @@ export const submitSellerApplication = createServerFn({ method: "POST" })
     return seller;
   });
 
+export const getAdminDashboard = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const supabaseAdmin = await adminClient();
+    await requireAdmin(context!.userId);
+
+    const [{ data: sellers, error: sellersError }, { data: products, error: productsError }, { data: orders, error: ordersError }] = await Promise.all([
+      supabaseAdmin.from("sellers").select("*").order("created_at", { ascending: false }),
+      supabaseAdmin
+        .from("products")
+        .select("id,name,slug,price_kobo,stock,status,image_urls,created_at,sellers(business_name),categories(name)")
+        .order("created_at", { ascending: false })
+        .limit(100),
+      supabaseAdmin
+        .from("orders")
+        .select("id,order_number,buyer_name,total_kobo,status,payment_status,payment_method,created_at")
+        .order("created_at", { ascending: false })
+        .limit(100),
+    ]);
+    if (sellersError) throw sellersError;
+    if (productsError) throw productsError;
+    if (ordersError) throw ordersError;
+
+    return {
+      sellers: sellers ?? [],
+      products: products ?? [],
+      orders: orders ?? [],
+    };
+  });
+
 export const saveProduct = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: ProductInput) => input)
